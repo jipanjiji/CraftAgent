@@ -99,7 +99,23 @@ class ArchiveInspector {
             }
           });
 
-          resolve({
+          const keyManifestFiles = files.filter(f => 
+            f === 'plugin.yml' || 
+            f === 'paper-plugin.yml' || 
+            f === 'fabric.mod.json' || 
+            f === 'quilt.mod.json' || 
+            f === 'META-INF/MANIFEST.MF' || 
+            f === 'velocity-plugin.json' ||
+            f === 'bungee.yml' ||
+            f.endsWith('.yml') || 
+            f.endsWith('.json')
+          );
+
+          const primaryManifest = keyManifestFiles.find(f => 
+            f === 'plugin.yml' || f === 'paper-plugin.yml' || f === 'fabric.mod.json' || f === 'quilt.mod.json' || f === 'velocity-plugin.json' || f === 'bungee.yml'
+          );
+
+          const baseResult = {
             success: true,
             path: fullPath,
             fileName: path.basename(fullPath),
@@ -107,18 +123,24 @@ class ArchiveInspector {
             totalEntries: rawLines.length,
             totalFiles: files.length,
             totalDirectories: directories.length,
-            entries: rawLines.slice(0, 500),
-            hasMoreEntries: rawLines.length > 500,
-            keyManifestFiles: files.filter(f => 
-              f === 'plugin.yml' || 
-              f === 'paper-plugin.yml' || 
-              f === 'fabric.mod.json' || 
-              f === 'quilt.mod.json' || 
-              f === 'META-INF/MANIFEST.MF' || 
-              f.endsWith('.yml') || 
-              f.endsWith('.json')
-            )
-          });
+            entries: rawLines.slice(0, 300),
+            hasMoreEntries: rawLines.length > 300,
+            keyManifestFiles: keyManifestFiles
+          };
+
+          if (primaryManifest) {
+            execFile('tar', ['-xOf', fullPath, primaryManifest], { maxBuffer: 1024 * 1024 }, (mErr, mStdout) => {
+              if (!mErr && mStdout) {
+                baseResult.manifest = {
+                  file: primaryManifest,
+                  content: mStdout.slice(0, 8000)
+                };
+              }
+              resolve(baseResult);
+            });
+          } else {
+            resolve(baseResult);
+          }
         });
       });
     } catch (err) {

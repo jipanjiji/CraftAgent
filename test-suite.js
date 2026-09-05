@@ -144,6 +144,11 @@ async function runTests() {
     assert.ok(listRes.entries.includes('fabric.mod.json'));
     console.log(`  ✓ Native ArchiveInspector verified on actual jar (${listRes.detectedPluginType}, ${listRes.totalEntries} entries).`);
 
+    assert.ok(listRes.manifest, 'Should have auto-extracted manifest in listEntries');
+    assert.strictEqual(listRes.manifest.file, 'fabric.mod.json');
+    assert.ok(listRes.manifest.content.includes('Marlow\'s Crystal Optimizer'));
+    console.log(`  ✓ Native ArchiveInspector auto-extracted manifest (${listRes.manifest.file}) in one call.`);
+
     const readModJson = await inspector.readEntry(testJarPath, 'fabric.mod.json');
     assert.strictEqual(readModJson.success, true);
     assert.ok(readModJson.content.includes('Marlow\'s Crystal Optimizer'));

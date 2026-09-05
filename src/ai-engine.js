@@ -458,47 +458,80 @@ class AIEngine {
         let fullReasoningContent = '';
         const toolCallsAccumulator = [];
 
-        for await (const chunk of stream) {
-          if (this.isAborted) break;
+        try {
+          for await (const chunk of stream) {
+            if (this.isAborted) break;
 
-          const delta = chunk.choices[0]?.delta;
-          if (!delta) continue;
+            const delta = chunk.choices[0]?.delta;
+            if (!delta) continue;
 
-          // Capture reasoning from DeepSeek / reasoning models
-          const reasoningChunk = delta.reasoning_content || delta.reasoning;
-          if (reasoningChunk) {
-            fullReasoningContent += reasoningChunk;
-          }
+            // Capture reasoning from DeepSeek / reasoning models
+            const reasoningChunk = delta.reasoning_content || delta.reasoning;
+            if (reasoningChunk) {
+              fullReasoningContent += reasoningChunk;
+            }
 
-          // Stream text content
-          if (delta.content) {
-            fullTextContent += delta.content;
-            if (onChunk) onChunk(delta.content);
-          }
+            // Stream text content
+            if (delta.content) {
+              fullTextContent += delta.content;
+              if (onChunk) onChunk(delta.content);
+            }
 
-          // Accumulate tool calls
-          if (delta.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const idx = (tc.index !== undefined && tc.index !== null)
-                ? tc.index
-                : (toolCallsAccumulator.length > 0 ? toolCallsAccumulator.length - 1 : 0);
+            // Accumulate tool calls
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = (tc.index !== undefined && tc.index !== null)
+                  ? tc.index
+                  : (toolCallsAccumulator.length > 0 ? toolCallsAccumulator.length - 1 : 0);
 
-              if (!toolCallsAccumulator[idx]) {
-                toolCallsAccumulator[idx] = {
-                  id: tc.id || '',
-                  type: 'function',
-                  function: {
-                    name: tc.function?.name || '',
-                    arguments: tc.function?.arguments || ''
-                  }
-                };
-              } else {
-                if (tc.id) toolCallsAccumulator[idx].id += tc.id;
-                if (tc.function?.name) toolCallsAccumulator[idx].function.name += tc.function.name;
-                if (tc.function?.arguments) toolCallsAccumulator[idx].function.arguments += tc.function.arguments;
+                if (!toolCallsAccumulator[idx]) {
+                  toolCallsAccumulator[idx] = {
+                    id: tc.id || '',
+                    type: 'function',
+                    function: {
+                      name: tc.function?.name || '',
+                      arguments: tc.function?.arguments || ''
+                    }
+                  };
+                } else {
+                  if (tc.id) toolCallsAccumulator[idx].id += tc.id;
+                  if (tc.function?.name) toolCallsAccumulator[idx].function.name += tc.function.name;
+                  if (tc.function?.arguments) toolCallsAccumulator[idx].function.arguments += tc.function.arguments;
+                }
               }
             }
           }
+        } catch (streamErr) {
+          console.warn("AI Engine stream interrupted:", streamErr);
+          const errMsg = (streamErr.message || '').toLowerCase();
+          const isNetworkDrop = errMsg.includes('premature close') || 
+                                errMsg.includes('econnreset') || 
+                                errMsg.includes('socket hang up') || 
+                                errMsg.includes('etimedout');
+
+          if (isNetworkDrop && !this.isAborted) {
+            // If the model had already streamed significant content to the user, preserve it gracefully
+            if (fullTextContent && fullTextContent.trim().length > 30) {
+              const notice = '\n\n*(Catatan: Koneksi streaming terputus dari server. Ketik "lanjut" untuk melanjutkan respons jika belum tuntas.)*';
+              fullTextContent += notice;
+              if (onChunk) onChunk(notice);
+
+              this.historyManager.addMessage({
+                role: 'assistant',
+                content: fullTextContent
+              });
+              if (onFinish) onFinish({ text: fullTextContent });
+              return;
+            } else if (loopIterations === 1 && autoContinueCount === 0) {
+              // Retry once for transient initial drop
+              console.log("Transient stream drop on iteration 1, retrying once...");
+              autoContinueCount++;
+              loopIterations--;
+              await new Promise(r => setTimeout(r, 1200));
+              continue;
+            }
+          }
+          throw streamErr;
         }
 
         if (this.isAborted) {
@@ -526,7 +559,7 @@ class AIEngine {
             autoContinueCount++;
             this.historyManager.addMessage({
               role: 'user',
-              content: 'Lanjutkan pembuatan file-file plugin secara langsung menggunakan tool write_file sekarang.'
+              content: 'Lanjutkan untuk merespons dan menyelesaikan instruksi user.'
             });
             continue;
           }
@@ -545,14 +578,14 @@ class AIEngine {
             }
             this.historyManager.addMessage({
               role: 'user',
-              content: 'Lanjutkan sekarang dan panggil tool yang diperlukan (patch_file, write_file, atau execute_terminal_command) untuk mengeksekusinya langsung tanpa berhenti.'
+              content: 'Lanjutkan sekarang dan jalankan tindakan atau berikan penjelasan yang diperlukan untuk menyelesaikannya.'
             });
             continue;
           }
 
           // 3. Fallback: If fullTextContent is still empty, provide friendly response instead of blank card
           if (!fullTextContent.trim()) {
-            fullTextContent = 'Saya siap melanjutkan pembuatan plugin. Silakan tentukan file atau fitur yang ingin dibuat, atau beri perintah untuk mulai menulis file.';
+            fullTextContent = 'Saya siap membantu. Silakan beri tahu file apa yang ingin diperiksa atau fitur apa yang ingin dibuat.';
             if (onChunk) onChunk(fullTextContent);
           }
 
@@ -649,7 +682,11 @@ class AIEngine {
       }
     } catch (err) {
       console.error("AI Engine error:", err);
-      if (onError) onError(err.message);
+      let userFriendlyErr = err.message;
+      if (/premature close/i.test(err.message)) {
+        userFriendlyErr = "Koneksi streaming ke AI server terputus di tengah jalan (Premature close). Anda bisa mengetik 'lanjutkan' untuk melanjutkan proses.";
+      }
+      if (onError) onError(userFriendlyErr);
     }
   }
 
