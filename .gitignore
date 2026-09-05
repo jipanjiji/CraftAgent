@@ -5,7 +5,10 @@ node_modules/
 release/win-unpacked/
 release/*.blockmap
 release/builder-debug.yml
+release/latest*.yml
 builder-effective-config.yaml
+.craft/
+__test_workspace__/
 
 # Runtime & Environment
 *.log

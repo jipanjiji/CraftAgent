@@ -14,7 +14,7 @@
 
 <br>
 
-[📥 **Download Portable Executable (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.0/Craft.Agent.1.0.0.exe) &nbsp;•&nbsp; [💾 **Download Windows Installer (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.0/Craft.Agent.Setup.1.0.0.exe) &nbsp;•&nbsp; [🚀 **Latest Release (v1.0.0)**](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.0)
+[📥 **Download Portable Executable (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.1/Craft.Agent.1.0.1.exe) &nbsp;•&nbsp; [💾 **Download Windows Installer (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.1/Craft.Agent.Setup.1.0.1.exe) &nbsp;•&nbsp; [🚀 **Latest Release (v1.0.1)**](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.1)
 
 </div>
 
@@ -24,18 +24,18 @@
 
 **Craft Agent** is a full-featured desktop AI pair programmer designed specifically for Minecraft server administrators, plugin developers, and general software engineers. Built on Electron with a distraction-free obsidian aesthetic, Craft Agent connects to the **xKiro API Gateway** to grant instant access to over **109+ state-of-the-art AI models** (DeepSeek, Claude Sonnet/Opus, GPT-5.6, Gemini Flash/Pro, Qwen Coder, Mistral, and more).
 
-Whether you need to scaffold a Paper 1.20+ teleportation plugin, build production `.jar` binaries with Gradle Wrapper, inspect workspace trees, search live PaperMC docs, or remotely edit configs on a server panel via WinSCP, Craft Agent executes the entire workflow autonomously.
+Whether you need to scaffold a Paper 1.20+ teleportation plugin, build production `.jar` binaries with Gradle Wrapper, inspect workspace trees, decompile/read `.jar` archives natively, search live PaperMC docs, or remotely edit configs on a server panel via WinSCP, Craft Agent executes the entire workflow autonomously.
 
 ---
 
 ## 🚀 Instant Download (Ready-to-Use)
 
-No Node.js or development environment needed! Simply download the standalone Windows build from the [v1.0.0 Release](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.0):
+No Node.js or development environment needed! Simply download the standalone Windows build from the [v1.0.1 Release](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.1):
 
 | Package Type | File Name | Description |
 | :--- | :--- | :--- |
-| **⭐ Portable Executable** | [**`Craft.Agent.1.0.0.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.0/Craft.Agent.1.0.0.exe) | **Zero installation required.** Double-click to run immediately anywhere (USB, Google Drive, Desktop). |
-| **Windows Installer** | [**`Craft.Agent.Setup.1.0.0.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.0/Craft.Agent.Setup.1.0.0.exe) | Complete setup wizard with Desktop shortcuts and Start Menu integration. |
+| **⭐ Portable Executable** | [**`Craft.Agent.1.0.1.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.1/Craft.Agent.1.0.1.exe) | **Zero installation required.** Double-click to run immediately anywhere (USB, Google Drive, Desktop). |
+| **Windows Installer** | [**`Craft.Agent.Setup.1.0.1.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.1/Craft.Agent.Setup.1.0.1.exe) | Complete setup wizard with Desktop shortcuts and Start Menu integration. |
 
 ---
 

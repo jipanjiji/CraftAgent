@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('craftAgent', {
   getWorkspaceStructure: () => ipcRenderer.invoke('workspace:get-structure'),
 
   // AI Chat & Execution
-  sendMessage: (text) => ipcRenderer.invoke('ai:send-message', text),
+  sendMessage: (payload) => ipcRenderer.invoke('ai:send-message', payload),
   abortRequest: () => ipcRenderer.invoke('ai:abort'),
   clearChat: () => ipcRenderer.invoke('ai:clear-history'),
   setHistory: (messages) => ipcRenderer.invoke('ai:set-history', messages),

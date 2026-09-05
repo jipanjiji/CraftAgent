@@ -5,6 +5,7 @@ class FileManager {
   constructor(workspaceRoot = null, maxReadSize = 512000) {
     this.workspaceRoot = workspaceRoot;
     this.maxReadSize = maxReadSize;
+    this.confirmCallback = null;
   }
 
   setWorkspaceRoot(root) {
@@ -15,9 +16,78 @@ class FileManager {
     this.maxReadSize = size;
   }
 
+  setConfirmCallback(fn) {
+    this.confirmCallback = fn;
+  }
+
   /**
-   * Validate and resolve safe path inside workspace.
-   * Throws or returns null if path escapes workspace root.
+   * Validate and resolve path.
+   * If inside workspace, resolves immediately.
+   * If outside workspace, prompts user via confirmCallback if configured.
+   */
+  async resolvePathWithApproval(targetPath, action = 'read_file') {
+    if (!targetPath || typeof targetPath !== 'string') {
+      throw new Error("Invalid file path specified.");
+    }
+
+    let resolvedTarget;
+    if (path.isAbsolute(targetPath)) {
+      resolvedTarget = path.resolve(targetPath);
+    } else if (this.workspaceRoot) {
+      resolvedTarget = path.resolve(this.workspaceRoot, targetPath);
+    } else {
+      resolvedTarget = path.resolve(process.cwd(), targetPath);
+    }
+
+    if (!this.workspaceRoot) {
+      // If no workspace is selected, any access is external
+      if (this.confirmCallback) {
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        const approved = await this.confirmCallback({
+          id: requestId,
+          type: 'EXTERNAL_PATH',
+          action: action,
+          path: resolvedTarget,
+          description: `${action} on: ${path.basename(resolvedTarget)}`
+        });
+        if (!approved) {
+          throw new Error(`Access denied: User rejected file access to "${targetPath}".`);
+        }
+        return resolvedTarget;
+      }
+      throw new Error("No active workspace selected. Please select a workspace folder first.");
+    }
+
+    const resolvedRoot = path.resolve(this.workspaceRoot);
+
+    // If within workspace boundaries, allow immediately
+    if (resolvedTarget.startsWith(resolvedRoot)) {
+      return resolvedTarget;
+    }
+
+    // Path is outside workspace boundaries
+    if (this.confirmCallback) {
+      const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      const approved = await this.confirmCallback({
+        id: requestId,
+        type: 'EXTERNAL_PATH',
+        action: action,
+        path: resolvedTarget,
+        description: `${action} on external file: ${path.basename(resolvedTarget)}`
+      });
+
+      if (!approved) {
+        throw new Error(`Access denied: User rejected external path access to "${targetPath}".`);
+      }
+
+      return resolvedTarget;
+    }
+
+    throw new Error(`Access denied: Path "${targetPath}" is outside workspace boundaries.`);
+  }
+
+  /**
+   * Synchronous safe path resolver strictly confined to workspace.
    */
   resolveSafePath(targetPath) {
     if (!this.workspaceRoot) {
@@ -38,11 +108,11 @@ class FileManager {
   }
 
   /**
-   * Reads a file within the workspace up to maxReadSize bytes.
+   * Reads a file within or outside workspace (with approval) up to maxReadSize bytes.
    */
-  readFile(relativePath) {
+  async readFile(relativePath) {
     try {
-      const fullPath = this.resolveSafePath(relativePath);
+      const fullPath = await this.resolvePathWithApproval(relativePath, 'read_file');
 
       if (!fs.existsSync(fullPath)) {
         return {
@@ -84,12 +154,12 @@ class FileManager {
   }
 
   /**
-   * Writes or overwrites a file inside the workspace.
+   * Writes or overwrites a file inside or outside workspace (with approval).
    * Automatically creates intermediate directories.
    */
-  writeFile(relativePath, content) {
+  async writeFile(relativePath, content) {
     try {
-      const fullPath = this.resolveSafePath(relativePath);
+      const fullPath = await this.resolvePathWithApproval(relativePath, 'write_file');
       const parentDir = path.dirname(fullPath);
 
       if (!fs.existsSync(parentDir)) {
@@ -98,13 +168,15 @@ class FileManager {
 
       fs.writeFileSync(fullPath, content, 'utf8');
       const stat = fs.statSync(fullPath);
-      const rel = path.relative(this.workspaceRoot, fullPath);
+      const displayPath = this.workspaceRoot && fullPath.startsWith(path.resolve(this.workspaceRoot))
+        ? path.relative(this.workspaceRoot, fullPath)
+        : fullPath;
 
       return {
         success: true,
-        path: rel,
+        path: displayPath,
         bytesWritten: stat.size,
-        message: `Successfully wrote ${stat.size} bytes to ${rel}`
+        message: `Successfully wrote ${stat.size} bytes to ${displayPath}`
       };
     } catch (err) {
       return {
@@ -118,9 +190,9 @@ class FileManager {
    * Patches a file by finding a specific block of text and replacing it.
    * Handles CRLF / LF discrepancies gracefully.
    */
-  patchFile(relativePath, searchBlock, replaceBlock) {
+  async patchFile(relativePath, searchBlock, replaceBlock) {
     try {
-      const fullPath = this.resolveSafePath(relativePath);
+      const fullPath = await this.resolvePathWithApproval(relativePath, 'patch_file');
 
       if (!fs.existsSync(fullPath)) {
         return {
@@ -130,6 +202,9 @@ class FileManager {
       }
 
       const original = fs.readFileSync(fullPath, 'utf8');
+      const displayPath = this.workspaceRoot && fullPath.startsWith(path.resolve(this.workspaceRoot))
+        ? path.relative(this.workspaceRoot, fullPath)
+        : fullPath;
 
       // Attempt direct match
       if (original.includes(searchBlock)) {
@@ -137,8 +212,8 @@ class FileManager {
         fs.writeFileSync(fullPath, updated, 'utf8');
         return {
           success: true,
-          path: path.relative(this.workspaceRoot, fullPath),
-          message: `Successfully patched ${relativePath}`
+          path: displayPath,
+          message: `Successfully patched ${displayPath}`
         };
       }
 
@@ -157,8 +232,8 @@ class FileManager {
         fs.writeFileSync(fullPath, updated, 'utf8');
         return {
           success: true,
-          path: path.relative(this.workspaceRoot, fullPath),
-          message: `Successfully patched ${relativePath} (normalized line endings)`
+          path: displayPath,
+          message: `Successfully patched ${displayPath} (normalized line endings)`
         };
       }
 
@@ -175,11 +250,11 @@ class FileManager {
   }
 
   /**
-   * Downloads a remote file directly into the workspace.
+   * Downloads a remote file directly into the workspace or destination.
    */
   async downloadFile(url, relativePath) {
     try {
-      const fullPath = this.resolveSafePath(relativePath);
+      const fullPath = await this.resolvePathWithApproval(relativePath, 'download_file');
       const parentDir = path.dirname(fullPath);
 
       if (!fs.existsSync(parentDir)) {
@@ -203,12 +278,15 @@ class FileManager {
       const buffer = Buffer.from(arrayBuffer);
       fs.writeFileSync(fullPath, buffer);
 
-      const rel = path.relative(this.workspaceRoot, fullPath);
+      const displayPath = this.workspaceRoot && fullPath.startsWith(path.resolve(this.workspaceRoot))
+        ? path.relative(this.workspaceRoot, fullPath)
+        : fullPath;
+
       return {
         success: true,
-        path: rel,
+        path: displayPath,
         bytesDownloaded: buffer.length,
-        message: `Successfully downloaded ${buffer.length} bytes to ${rel}`
+        message: `Successfully downloaded ${buffer.length} bytes to ${displayPath}`
       };
     } catch (err) {
       return {

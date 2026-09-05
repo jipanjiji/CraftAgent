@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cfgApiKey = document.getElementById('cfgApiKey');
   const btnToggleApiKey = document.getElementById('btnToggleApiKey');
   const cfgModel = document.getElementById('cfgModel');
+  const cfgSecurityMode = document.getElementById('cfgSecurityMode');
   const cfgDefaultTimeout = document.getElementById('cfgDefaultTimeout');
   const timeoutValLabel = document.getElementById('timeoutValLabel');
   const cfgShell = document.getElementById('cfgShell');
@@ -45,6 +46,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     cfgBaseUrl.value = cfg.api.baseUrl || 'https://api.xkiro.com/v1';
     cfgApiKey.value = cfg.api.apiKey || '';
     if (cfg.api.model) cfgModel.value = cfg.api.model;
+    if (cfgSecurityMode && cfg.security && cfg.security.mode) {
+      cfgSecurityMode.value = cfg.security.mode;
+    }
     cfgDefaultTimeout.value = cfg.terminal.defaultTimeout || 60;
     timeoutValLabel.textContent = `${cfgDefaultTimeout.value}s`;
     cfgShell.value = cfg.terminal.shell || 'powershell';
@@ -88,6 +92,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         baseUrl: cfgBaseUrl.value.trim() || 'https://api.xkiro.com/v1',
         apiKey: cfgApiKey.value.trim(),
         model: cfgModel.value
+      },
+      security: {
+        mode: cfgSecurityMode ? cfgSecurityMode.value : 'approval'
       },
       terminal: {
         defaultTimeout: parseInt(cfgDefaultTimeout.value, 10) || 60,

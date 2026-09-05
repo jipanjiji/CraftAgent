@@ -161,7 +161,7 @@ const DEFAULT_CONFIG = {
     maxReadSize: 512000 // 500KB
   },
   history: {
-    maxMessages: 15
+    maxMessages: 35
   },
   ignoredFolders: [
     "target",
@@ -170,7 +170,8 @@ const DEFAULT_CONFIG = {
     ".git",
     "node_modules",
     ".vscode",
-    "dist"
+    "dist",
+    ".craft"
   ]
 };
 
@@ -215,6 +216,7 @@ class ConfigManager {
     try {
       this.config = {
         api: { ...this.config.api, ...(newConfig.api || {}) },
+        security: { ...this.config.security, ...(newConfig.security || {}) },
         terminal: { ...this.config.terminal, ...(newConfig.terminal || {}) },
         fileManager: { ...this.config.fileManager, ...(newConfig.fileManager || {}) },
         history: { ...this.config.history, ...(newConfig.history || {}) },

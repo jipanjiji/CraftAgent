@@ -128,10 +128,20 @@
           <!-- Centered Input Box -->
           <div class="chat-input-area">
             <div class="chat-input-container">
-              <div class="input-wrapper">
+              <!-- Attachment Preview Bar -->
+              <div class="attachment-preview-bar" id="attachmentPreviewBar" style="display: none;"></div>
+
+              <div class="input-wrapper" id="inputWrapper">
+                <button id="btnAttachFile" class="btn-attach" type="button" title="Attach file, JAR, or photo (or drag-and-drop / Ctrl+V paste)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                  </svg>
+                </button>
+                <input type="file" id="fileUploadInput" multiple style="display: none;" />
+
                 <textarea 
                   id="chatInput" 
-                  placeholder="Ask Craft Agent to inspect code, build plugins, run commands..." 
+                  placeholder="Ask Craft Agent to inspect code, build plugins, run commands... (Paste screenshot or drop files)" 
                   rows="1"
                 ></textarea>
                 <button id="btnSendMessage" class="btn-send" title="Send Message (Ctrl+Enter)">
@@ -198,23 +208,23 @@
       </main>
     </div>
 
-    <!-- Terminal Human-In-The-Loop Confirmation Modal -->
+    <!-- Terminal & External Path Confirmation Modal -->
     <div class="modal-overlay" id="terminalConfirmModal" style="display: none;">
       <div class="modal-card modal-terminal">
         <div class="modal-header">
-          <div class="modal-badge-danger">
+          <div class="modal-badge-danger" id="confirmModalBadge">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
               <line x1="12" y1="9" x2="12" y2="13"></line>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            <span>Terminal Command Approval</span>
+            <span id="confirmModalTitle">Terminal Command Approval</span>
           </div>
           <div class="timer-countdown" id="confirmCountdown">60s</div>
         </div>
 
         <div class="modal-body">
-          <p class="modal-desc">
+          <p class="modal-desc" id="confirmModalDesc">
             Craft Agent requests permission to execute the following shell command in your workspace directory:
           </p>
 
@@ -226,17 +236,17 @@
             <pre><code id="confirmCommandText">.\gradlew build</code></pre>
           </div>
 
-          <p class="modal-subtext">
-            ⚠️ Only approve commands you trust. Execution runs on your local machine.
+          <p class="modal-subtext" id="confirmModalSubtext">
+            ⚠️ Only approve actions you trust. Execution runs on your local machine.
           </p>
         </div>
 
         <div class="modal-actions">
           <button id="btnDenyTerminal" class="btn btn-secondary">
-            Deny Execution (No)
+            Deny (No)
           </button>
           <button id="btnApproveTerminal" class="btn btn-primary-gradient">
-            Approve & Execute (Yes)
+            Approve (Yes)
           </button>
         </div>
       </div>
@@ -353,6 +363,19 @@
             <button id="btnSaveSettings" class="btn btn-primary">Save Changes</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Fullscreen Image Lightbox Modal -->
+    <div id="imageLightboxModal" class="lightbox-modal" style="display: none;">
+    <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
+    <div class="lightbox-container">
+      <div class="lightbox-header">
+        <span id="lightboxImageTitle" class="lightbox-title">Image Preview</span>
+        <button id="btnCloseLightbox" class="btn-icon lightbox-close-btn" title="Close (Esc)">✕</button>
+      </div>
+      <div class="lightbox-body">
+        <img id="lightboxImageEl" src="" alt="Full preview" class="lightbox-img" />
       </div>
     </div>
   </div>

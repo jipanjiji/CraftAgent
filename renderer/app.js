@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const welcomeScreen = document.getElementById('welcomeScreen');
   const chatInput = document.getElementById('chatInput');
   const btnSendMessage = document.getElementById('btnSendMessage');
+  const btnAttachFile = document.getElementById('btnAttachFile');
+  const fileUploadInput = document.getElementById('fileUploadInput');
+  const attachmentPreviewBar = document.getElementById('attachmentPreviewBar');
+  const inputWrapper = document.getElementById('inputWrapper');
 
   // Console Elements
   const consoleLogs = document.getElementById('consoleLogs');
@@ -35,8 +39,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const logFilter = document.getElementById('logFilter');
   const btnClearLog = document.getElementById('btnClearLog');
 
-  // Terminal Confirm Modal
+  // Terminal & External Path Confirm Modal
   const terminalConfirmModal = document.getElementById('terminalConfirmModal');
+  const confirmModalBadge = document.getElementById('confirmModalBadge');
+  const confirmModalTitle = document.getElementById('confirmModalTitle');
+  const confirmModalDesc = document.getElementById('confirmModalDesc');
+  const confirmModalSubtext = document.getElementById('confirmModalSubtext');
   const confirmCommandText = document.getElementById('confirmCommandText');
   const confirmCwd = document.getElementById('confirmCwd');
   const confirmTimeout = document.getElementById('confirmTimeout');
@@ -65,6 +73,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cfgMaxMessages = document.getElementById('cfgMaxMessages');
   const historySizeLabel = document.getElementById('historySizeLabel');
 
+  // Lightbox Modal
+  const imageLightboxModal = document.getElementById('imageLightboxModal');
+  const lightboxBackdrop = document.getElementById('lightboxBackdrop');
+  const lightboxImageTitle = document.getElementById('lightboxImageTitle');
+  const lightboxImageEl = document.getElementById('lightboxImageEl');
+  const btnCloseLightbox = document.getElementById('btnCloseLightbox');
+
   // State
   let cachedModelCatalog = null;
   let activeAssistantBubble = null;
@@ -82,6 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isGenerating = false;
   let thinkingStartTime = 0;
   let thinkingInterval = null;
+  let pendingAttachments = [];
 
   // Session Management State
   let sessions = [];
@@ -203,8 +219,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const modelShort = cfg.api.model.split('/')[1] || cfg.api.model;
       currentModelName.textContent = modelShort;
     }
-    if (cfg.security && cfg.security.mode && cfgSecurityMode) {
-      cfgSecurityMode.value = cfg.security.mode;
+    if (cfgSecurityMode) {
+      cfgSecurityMode.value = (cfg.security && cfg.security.mode) ? cfg.security.mode : 'approval';
     }
     cfgDefaultTimeout.value = cfg.terminal.defaultTimeout || 60;
     timeoutValLabel.textContent = `${cfgDefaultTimeout.value}s`;
@@ -236,6 +252,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // AUTO-RECONSTRUCT: If any session has HTML but empty messages array,
     // reconstruct conversation dialogue so memory is never lost across app restarts!
     sessions.forEach(sess => {
+      if (sess.html) {
+        sess.html = sess.html.replace(/onclick="window\.open\([^"]*\)"/gi, '');
+      }
       if ((!sess.messages || sess.messages.length === 0) && sess.html) {
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = sess.html;
@@ -331,7 +350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         current.html = '';
       } else {
         if (ws) ws.remove();
-        current.html = clone.innerHTML;
+        current.html = clone.innerHTML.replace(/onclick="window\.open\([^"]*\)"/gi, '');
       }
 
       // Persist full backend conversation history!
@@ -504,20 +523,140 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // Helper: Format Bytes
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  // Render Staged Attachment Preview Bar
+  function renderAttachmentPreview() {
+    if (!attachmentPreviewBar) return;
+    if (pendingAttachments.length === 0) {
+      attachmentPreviewBar.style.display = 'none';
+      attachmentPreviewBar.innerHTML = '';
+      return;
+    }
+
+    attachmentPreviewBar.style.display = 'flex';
+    attachmentPreviewBar.innerHTML = '';
+
+    pendingAttachments.forEach((att, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'attachment-chip';
+      if (att.isImage) {
+        chip.innerHTML = `
+          <img class="attachment-chip-thumb" src="${att.dataUrl}" alt="" />
+          <div class="attachment-chip-info">
+            <span class="attachment-chip-name" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</span>
+            <span class="attachment-chip-size">${formatBytes(att.size)}</span>
+          </div>
+          <button class="attachment-chip-remove" title="Remove attachment">&times;</button>
+        `;
+      } else {
+        const icon = att.name.endsWith('.jar') ? '☕' : (att.name.endsWith('.zip') ? '📦' : '📄');
+        chip.innerHTML = `
+          <span class="attachment-chip-icon">${icon}</span>
+          <div class="attachment-chip-info">
+            <span class="attachment-chip-name" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</span>
+            <span class="attachment-chip-size">${formatBytes(att.size)}</span>
+          </div>
+          <button class="attachment-chip-remove" title="Remove attachment">&times;</button>
+        `;
+      }
+
+      chip.querySelector('.attachment-chip-remove').onclick = () => {
+        pendingAttachments.splice(idx, 1);
+        renderAttachmentPreview();
+      };
+      attachmentPreviewBar.appendChild(chip);
+    });
+  }
+
+  function addFilesToAttachments(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    Array.from(fileList).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        pendingAttachments.push({
+          id: `att_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/octet-stream',
+          isImage: file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name),
+          dataUrl: reader.result
+        });
+        renderAttachmentPreview();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Attach button & file input listeners
+  if (btnAttachFile && fileUploadInput) {
+    btnAttachFile.addEventListener('click', () => {
+      fileUploadInput.click();
+    });
+
+    fileUploadInput.addEventListener('change', (e) => {
+      addFilesToAttachments(e.target.files);
+      fileUploadInput.value = '';
+    });
+  }
+
+  // Clipboard Paste (Ctrl+V) for screenshots and files
+  document.addEventListener('paste', (e) => {
+    if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+      const files = Array.from(e.clipboardData.files);
+      if (files.some(f => f.type.startsWith('image/') || f.size > 0)) {
+        e.preventDefault();
+        addFilesToAttachments(files);
+      }
+    }
+  });
+
+  // Drag and drop into chat area
+  const dropTargets = [chatPanel, inputWrapper, chatMessages].filter(Boolean);
+  dropTargets.forEach(target => {
+    target.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (inputWrapper) inputWrapper.classList.add('drag-over');
+    });
+    target.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (inputWrapper) inputWrapper.classList.remove('drag-over');
+    });
+    target.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (inputWrapper) inputWrapper.classList.remove('drag-over');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        addFilesToAttachments(e.dataTransfer.files);
+      }
+    });
+  });
+
   // 7. Send Chat Message
   async function sendMessage() {
     const text = chatInput.value.trim();
-    if (!text || isGenerating) return;
+    if ((!text && pendingAttachments.length === 0) || isGenerating) return;
 
     if (welcomeScreen) {
       welcomeScreen.style.display = 'none';
     }
 
+    const titleCandidate = text || (pendingAttachments.length > 0 ? `Upload: ${pendingAttachments[0].name}` : 'New Message');
+
     // Lazy commit: Only create & persist session when the first message is sent!
     if (isDraftSession || !currentSessionId) {
       const newSession = {
         id: `sess_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        title: text.length > 28 ? text.slice(0, 26) + '...' : text,
+        title: titleCandidate.length > 28 ? titleCandidate.slice(0, 26) + '...' : titleCandidate,
         createdAt: Date.now(),
         html: '',
         messages: []
@@ -531,14 +670,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Auto-update session title if it's still default "New Chat" or "Session 1"
       const curr = sessions.find(s => s.id === currentSessionId);
       if (curr && (curr.title === 'New Chat' || curr.title.startsWith('Session '))) {
-        curr.title = text.length > 28 ? text.slice(0, 26) + '...' : text;
+        curr.title = titleCandidate.length > 28 ? titleCandidate.slice(0, 26) + '...' : titleCandidate,
         renderSessionsList();
         saveSessionsToStorage();
       }
     }
 
-    // Append User Message
-    appendUserMessage(text);
+    const attachmentsToSend = [...pendingAttachments];
+    pendingAttachments = [];
+    renderAttachmentPreview();
+
+    // Append User Message with attachment badges
+    appendUserMessage(text, attachmentsToSend);
     chatInput.value = '';
     chatInput.style.height = 'auto';
 
@@ -570,7 +713,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 1000);
 
     try {
-      await window.craftAgent.sendMessage(text);
+      await window.craftAgent.sendMessage({
+        text: text,
+        attachments: attachmentsToSend
+      });
     } catch (err) {
       appendErrorMessage(err.message || 'An unknown error occurred');
       await finishGeneration();
@@ -611,9 +757,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.addEventListener('keydown', async (e) => {
-    if (e.key === 'Escape' && isGenerating) {
-      e.preventDefault();
-      await stopGeneration();
+    if (e.key === 'Escape') {
+      if (imageLightboxModal && imageLightboxModal.style.display === 'flex') {
+        e.preventDefault();
+        closeImageLightbox();
+        return;
+      }
+      if (isGenerating) {
+        e.preventDefault();
+        await stopGeneration();
+      }
     }
   });
 
@@ -647,16 +800,51 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // 8. UI Rendering Helpers
-  function appendUserMessage(text) {
+  function appendUserMessage(text, attachments = []) {
     const msgDiv = document.createElement('div');
     msgDiv.className = 'chat-message user';
+
+    let attachmentsHtml = '';
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      const images = attachments.filter(a => a.isImage || (a.type && a.type.startsWith('image/')));
+      const files = attachments.filter(a => !a.isImage && (!a.type || !a.type.startsWith('image/')));
+
+      let imgHtml = '';
+      if (images.length > 0) {
+        imgHtml = `<div class="message-image-gallery">` +
+          images.map(img => `<img class="message-img-thumb" src="${img.dataUrl}" alt="${escapeHtml(img.name)}" title="${escapeHtml(img.name)} (Click to view full size)" data-img-name="${escapeHtml(img.name)}" style="cursor: pointer;" />`).join('') +
+          `</div>`;
+      }
+
+      let fileHtml = '';
+      if (files.length > 0) {
+        fileHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">` +
+          files.map(f => {
+            const icon = f.name.endsWith('.jar') ? '☕' : (f.name.endsWith('.zip') ? '📦' : '📄');
+            return `<div class="message-file-badge">
+              <span class="file-badge-icon">${icon}</span>
+              <span>${escapeHtml(f.name)}</span>
+              <span class="file-badge-size">(${formatBytes(f.size)})</span>
+            </div>`;
+          }).join('') +
+          `</div>`;
+      }
+
+      attachmentsHtml = `<div class="message-attachments">${imgHtml}${fileHtml}</div>`;
+    }
+
+    const textHtml = text ? `<div>${escapeHtml(text)}</div>` : '';
+
     msgDiv.innerHTML = `
       <div class="message-meta">
         <span>You</span>
         <span>•</span>
         <span>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
-      <div class="message-bubble">${escapeHtml(text)}</div>
+      <div class="message-bubble">
+        ${attachmentsHtml}
+        ${textHtml}
+      </div>
     `;
     chatMessages.appendChild(msgDiv);
     scrollChatBottom();
@@ -1009,12 +1197,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     await finishGeneration();
   });
 
-  // 11. Terminal Human-In-The-Loop Confirmation
+  // 11. Human-In-The-Loop Approval (Terminal & External Path)
   window.craftAgent.onTerminalConfirmRequest((req) => {
     activeTerminalRequestId = req.id;
-    confirmCommandText.textContent = req.command;
-    confirmCwd.textContent = req.workingDir || 'Workspace Root';
-    confirmTimeout.textContent = `Timeout: ${req.timeoutSeconds || 60}s`;
+
+    if (req.type === 'EXTERNAL_PATH') {
+      if (confirmModalTitle) confirmModalTitle.textContent = 'External Path Access Approval';
+      if (confirmModalDesc) confirmModalDesc.textContent = `Craft Agent requests permission to ${req.action.replace('_', ' ')} on a file or folder outside your active workspace:`;
+      if (confirmModalSubtext) confirmModalSubtext.textContent = '⚠️ This file/folder is outside your active workspace. Only approve if you explicitly asked Craft Agent to access it.';
+      confirmCommandText.textContent = req.path;
+      confirmCwd.textContent = req.action.toUpperCase();
+      confirmTimeout.textContent = req.description || 'External Path Access';
+    } else {
+      if (confirmModalTitle) confirmModalTitle.textContent = 'Terminal Command Approval';
+      if (confirmModalDesc) confirmModalDesc.textContent = 'Craft Agent requests permission to execute the following shell command in your workspace directory:';
+      if (confirmModalSubtext) confirmModalSubtext.textContent = '⚠️ Only approve commands you trust. Execution runs on your local machine.';
+      confirmCommandText.textContent = req.command;
+      confirmCwd.textContent = req.workingDir || 'Workspace Root';
+      confirmTimeout.textContent = `Timeout: ${req.timeoutSeconds || 60}s`;
+    }
 
     let secondsLeft = 60;
     confirmCountdown.textContent = `${secondsLeft}s`;
@@ -1217,6 +1418,39 @@ document.addEventListener('DOMContentLoaded', async () => {
       applySettingsToUI(currentSettings);
     }
   });
+
+  // 14. Image Lightbox Handlers
+  function openImageLightbox(src, title = 'Image Preview') {
+    if (!imageLightboxModal || !lightboxImageEl) return;
+    lightboxImageEl.src = src;
+    if (lightboxImageTitle) lightboxImageTitle.textContent = title;
+    imageLightboxModal.style.display = 'flex';
+  }
+
+  function closeImageLightbox() {
+    if (!imageLightboxModal) return;
+    imageLightboxModal.style.display = 'none';
+    if (lightboxImageEl) lightboxImageEl.src = '';
+  }
+
+  if (btnCloseLightbox) {
+    btnCloseLightbox.addEventListener('click', closeImageLightbox);
+  }
+  if (lightboxBackdrop) {
+    lightboxBackdrop.addEventListener('click', closeImageLightbox);
+  }
+
+  // Delegated click on chat images to open in lightbox instead of blank window
+  if (chatMessages) {
+    chatMessages.addEventListener('click', (e) => {
+      const img = e.target.closest('img');
+      if (img && img.src && (img.classList.contains('message-img-thumb') || img.closest('.message-image-gallery') || img.closest('.chat-message'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        openImageLightbox(img.src, img.getAttribute('data-img-name') || img.alt || 'Image Preview');
+      }
+    });
+  }
 
   // Markdown Formatter (Robust, tight lists, clean paragraph spacing)
   function formatMarkdown(text) {

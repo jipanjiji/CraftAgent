@@ -1,6 +1,6 @@
 {
   "name": "craft-agent",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Autonomous AI coding assistant desktop app for Minecraft plugin development & general programming",
   "main": "main.js",
   "scripts": {

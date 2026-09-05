@@ -1,5 +1,8 @@
 const { OpenAI } = require('openai');
 const { getSystemPrompt } = require('./system-prompt');
+const { ArchiveInspector } = require('./tools/archive-inspector');
+const { pruneToolContent } = require('./history-manager');
+const { WorkspaceMemory } = require('./workspace-memory');
 
 const TOOLS_SCHEMA = [
   {
@@ -27,14 +30,35 @@ const TOOLS_SCHEMA = [
   {
     type: "function",
     function: {
-      name: "read_file",
-      description: "Read the UTF-8 text contents of a file inside the active workspace up to 500KB. Fails if outside workspace.",
+      name: "inspect_jar",
+      description: "Inspect the contents of a .jar or .zip Minecraft plugin/mod archive. Lists internal files or extracts text from files like plugin.yml, fabric.mod.json, or config files. Works instantly on local or external jars.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Relative file path from workspace root"
+            description: "Relative path or absolute file path to the .jar or .zip file"
+          },
+          internal_file: {
+            type: "string",
+            description: "Optional internal file path inside the jar to read (e.g. 'plugin.yml', 'paper-plugin.yml', 'fabric.mod.json', 'META-INF/MANIFEST.MF', 'config.yml')"
+          }
+        },
+        required: ["path"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_file",
+      description: "Read the UTF-8 text contents of a file inside the active workspace (or external path if explicitly requested by user) up to 500KB.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Relative file path from workspace root, or absolute path to external file requested by user"
           }
         },
         required: ["path"]
@@ -45,13 +69,13 @@ const TOOLS_SCHEMA = [
     type: "function",
     function: {
       name: "write_file",
-      description: "Create a new file or completely overwrite an existing file. Automatically creates intermediate folders. For edits to existing code, use patch_file instead.",
+      description: "Create a new file or completely overwrite an existing file in the active workspace (or external path if explicitly requested by user). Automatically creates intermediate folders.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Relative file path from workspace root"
+            description: "Relative file path from workspace root, or absolute path requested by user"
           },
           content: {
             type: "string",
@@ -72,7 +96,7 @@ const TOOLS_SCHEMA = [
         properties: {
           path: {
             type: "string",
-            description: "Relative file path from workspace root"
+            description: "Relative file path from workspace root, or absolute path requested by user"
           },
           search_block: {
             type: "string",
@@ -91,10 +115,15 @@ const TOOLS_SCHEMA = [
     type: "function",
     function: {
       name: "get_workspace_structure",
-      description: "Scan the directory tree of the active workspace. Automatically respects .forgeignore, .gitignore, and common build folders.",
+      description: "Scan the directory tree of the active workspace or an external folder requested by the user. Automatically respects .forgeignore, .gitignore, and common build folders.",
       parameters: {
         type: "object",
-        properties: {}
+        properties: {
+          path: {
+            type: "string",
+            description: "Optional folder path to scan if user specifically requests scanning an external directory or other workspace. Defaults to active workspace."
+          }
+        }
       }
     }
   },
@@ -152,11 +181,47 @@ const TOOLS_SCHEMA = [
         required: ["url", "path"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_workspace_memory",
+      description: "PERSISTENT MEMORY: Update the workspace scratchpad (.craft/memory.json) to store discovered project facts (Java version, build tool, server platform), active goals checklist, or persistent notes that must be remembered across sessions.",
+      parameters: {
+        type: "object",
+        properties: {
+          project_facts: {
+            type: "object",
+            description: "Object containing key project facts, e.g. { javaVersion: 'Java 21', buildTool: 'Gradle', serverPlatform: 'Paper 1.20.4', name: 'MyPlugin' }"
+          },
+          active_goals: {
+            type: "array",
+            items: { type: "string" },
+            description: "Updated list of remaining tasks or goals to finish"
+          },
+          completed_goals: {
+            type: "array",
+            items: { type: "string" },
+            description: "List of goals or milestones just completed"
+          },
+          add_notes: {
+            type: "string",
+            description: "Any persistent note or user preference about the workspace to remember"
+          }
+        }
+      }
+    }
   }
 ];
 
 function formatToolStatusDescription(name, args) {
   switch (name) {
+    case 'update_workspace_memory':
+      return 'Updating workspace memory (.craft/memory.json)...';
+    case 'inspect_jar':
+      return args.internal_file
+        ? `Reading "${args.internal_file}" from archive: ${args.path || '...'}`
+        : `Inspecting archive contents: ${args.path || '...'}`;
     case 'read_file':
       return `Reading file: ${args.path || '...'}`;
     case 'write_file':
@@ -166,7 +231,7 @@ function formatToolStatusDescription(name, args) {
     case 'download_file':
       return `Downloading: ${args.path || args.url || '...'}`;
     case 'get_workspace_structure':
-      return `Scanning workspace project files...`;
+      return args.path ? `Scanning folder structure: ${args.path}...` : `Scanning workspace project files...`;
     case 'execute_terminal_command':
       return `Running command: ${args.command || '...'}`;
     case 'web_search':
@@ -179,22 +244,28 @@ function formatToolStatusDescription(name, args) {
 }
 
 class AIEngine {
-  constructor({ configManager, historyManager, fileManager, terminalExecutor, workspaceScanner, webIntelligence }) {
+  constructor({ configManager, historyManager, fileManager, terminalExecutor, workspaceScanner, webIntelligence, archiveInspector = null }) {
     this.configManager = configManager;
     this.historyManager = historyManager;
     this.fileManager = fileManager;
     this.terminalExecutor = terminalExecutor;
     this.workspaceScanner = workspaceScanner;
     this.webIntelligence = webIntelligence;
+    this.archiveInspector = archiveInspector || new ArchiveInspector();
+    this.workspaceMemory = new WorkspaceMemory(null);
     this.workspaceRoot = null;
     this.isAborted = false;
   }
 
   setWorkspaceRoot(root) {
     this.workspaceRoot = root;
+    this.workspaceMemory.setWorkspaceRoot(root);
     this.fileManager.setWorkspaceRoot(root);
     this.terminalExecutor.setWorkspaceRoot(root);
     this.workspaceScanner.setWorkspaceRoot(root);
+    if (this.archiveInspector) {
+      this.archiveInspector.setWorkspaceRoot(root);
+    }
   }
 
   getOpenAIClient() {
@@ -222,9 +293,69 @@ class AIEngine {
   }
 
   /**
+   * Two-stage Vision Pipeline:
+   * Sends image(s) to mistralai/mistral-large-2512 to transcribe visible text,
+   * error stacktraces, console logs, code snippets, and Minecraft GUI/visual elements.
+   */
+  async extractImageContentWithVision(images, onStatus) {
+    if (!Array.isArray(images) || images.length === 0) return null;
+
+    const validImages = images.filter(img => img && (img.dataUrl || typeof img === 'string'));
+    if (validImages.length === 0) return null;
+
+    if (onStatus) {
+      onStatus("Analyzing Image...");
+    }
+
+    try {
+      const client = this.getOpenAIClient();
+      const visionModel = "mistralai/mistral-large-2512";
+
+      const contentParts = [
+        {
+          type: "text",
+          text: "Transcribe all visible text, console logs, stack traces, code snippets, and UI labels verbatim from the image. If there are code errors or Minecraft exceptions, copy the exact lines. Then provide a concise description of the visual scene or GUI."
+        }
+      ];
+
+      for (const img of validImages) {
+        const url = img.dataUrl || (typeof img === 'string' ? img : '');
+        if (url) {
+          contentParts.push({
+            type: "image_url",
+            image_url: { url: url }
+          });
+        }
+      }
+
+      const response = await client.chat.completions.create({
+        model: visionModel,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert OCR and visual inspection AI. Transcribe all text, code snippets, stack traces, console logs, error lines, and UI elements verbatim from the provided image. Then summarize the visual layout or Minecraft context concisely."
+          },
+          {
+            role: "user",
+            content: contentParts
+          }
+        ]
+      }, {
+        signal: this.currentAbortController?.signal
+      });
+
+      const transcript = response.choices[0]?.message?.content || '';
+      return transcript.trim();
+    } catch (err) {
+      console.warn("Mistral vision extraction failed or unavailable:", err.message);
+      return `[Note: Mistral vision transcription returned: ${err.message}. Image attached: ${validImages.map(i => i.name || 'image').join(', ')}]`;
+    }
+  }
+
+  /**
    * Main chat loop: handles streaming text, tool calling resolution, and recursing until completion.
    */
-  async chat({ userMessage, onChunk, onToolStart, onToolComplete, onStatus, onError, onFinish }) {
+  async chat({ userMessage, attachments = [], onChunk, onToolStart, onToolComplete, onStatus, onError, onFinish }) {
     this.isAborted = false;
     this.currentAbortController = new AbortController();
 
@@ -236,15 +367,50 @@ class AIEngine {
       return;
     }
 
+    let processedUserMessage = userMessage || '';
+
+    // Handle attachments (Images & Files)
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      const images = attachments.filter(a => a.isImage || (a.type && a.type.startsWith('image/')));
+      const nonImages = attachments.filter(a => !a.isImage && (!a.type || !a.type.startsWith('image/')));
+
+      if (images.length > 0) {
+        const visionText = await this.extractImageContentWithVision(images, onStatus);
+        if (visionText) {
+          processedUserMessage = `[Image Analysis]:\n${visionText}\n\n${processedUserMessage}`;
+        }
+      }
+
+      if (nonImages.length > 0) {
+        const fileNotices = nonImages.map(f => {
+          const sizeStr = f.size ? `${(f.size / 1024).toFixed(1)} KB` : 'unknown size';
+          const loc = f.savedPath || f.name;
+          let notice = `[User Attached File: ${loc} (${sizeStr})]`;
+          if (f.isBinary || f.name.endsWith('.jar') || f.name.endsWith('.zip')) {
+            notice += `\n(Saved to workspace at "${loc}". You can inspect its internal files using the "inspect_jar" tool.)`;
+          } else if (f.textSnippet) {
+            notice += `\n--- Content Preview ---\n${f.textSnippet}\n-----------------------`;
+          }
+          return notice;
+        }).join('\n\n');
+
+        processedUserMessage = `${fileNotices}\n\n${processedUserMessage}`;
+      }
+    }
+
     // Add user message to history
     this.historyManager.addMessage({
       role: 'user',
-      content: userMessage
+      content: processedUserMessage
     });
 
     const client = this.getOpenAIClient();
     const model = config.api.model || 'openai/gpt-5.6-terra';
-    const systemPrompt = getSystemPrompt(this.workspaceRoot);
+    let systemPrompt = getSystemPrompt(this.workspaceRoot);
+    const memorySnippet = this.workspaceMemory.getFormattedPrompt();
+    if (memorySnippet) {
+      systemPrompt += `\n\n${memorySnippet}`;
+    }
 
     let loopIterations = 0;
     let autoContinueCount = 0;
@@ -459,12 +625,14 @@ class AIEngine {
             });
           }
 
-          // Push tool response message to history
+          // Push tool response message to history with head-tail pruning (Feature 1)
+          const rawToolJson = JSON.stringify(toolResult);
+          const prunedToolJson = pruneToolContent(rawToolJson);
           this.historyManager.addMessage({
             role: 'tool',
             tool_call_id: tc.id,
             name: funcName,
-            content: JSON.stringify(toolResult)
+            content: prunedToolJson
           });
         }
 
@@ -490,17 +658,24 @@ class AIEngine {
    */
   async dispatchTool(name, args) {
     switch (name) {
+      case 'inspect_jar':
+        if (args.internal_file) {
+          return await this.archiveInspector.readEntry(args.path, args.internal_file);
+        } else {
+          return await this.archiveInspector.listEntries(args.path);
+        }
+
       case 'read_file':
-        return this.fileManager.readFile(args.path);
+        return await this.fileManager.readFile(args.path);
 
       case 'write_file':
-        return this.fileManager.writeFile(args.path, args.content);
+        return await this.fileManager.writeFile(args.path, args.content);
 
       case 'patch_file':
-        return this.fileManager.patchFile(args.path, args.search_block, args.replace_block);
+        return await this.fileManager.patchFile(args.path, args.search_block, args.replace_block);
 
       case 'get_workspace_structure':
-        return this.workspaceScanner.scan();
+        return await this.workspaceScanner.scan(args.path);
 
       case 'execute_terminal_command':
         return await this.terminalExecutor.executeCommand(args.command, args.timeout_seconds);
@@ -513,6 +688,9 @@ class AIEngine {
 
       case 'download_file':
         return await this.fileManager.downloadFile(args.url, args.path);
+
+      case 'update_workspace_memory':
+        return this.workspaceMemory.update(args);
 
       default:
         return {

@@ -14,6 +14,9 @@ Menu.setApplicationMenu(null);
 let mainWindow = null;
 let pendingConfirmations = new Map();
 
+const fs = require('fs');
+const { ArchiveInspector } = require('./src/tools/archive-inspector');
+
 // Initialize Services
 let configManager;
 let fileManager;
@@ -21,6 +24,7 @@ let terminalExecutor;
 let workspaceScanner;
 let webIntelligence;
 let historyManager;
+let archiveInspector;
 let aiEngine;
 
 function initServices() {
@@ -33,6 +37,7 @@ function initServices() {
   workspaceScanner = new WorkspaceScanner(null, cfg.ignoredFolders);
   webIntelligence = new WebIntelligence();
   historyManager = new HistoryManager(cfg.history.maxMessages);
+  archiveInspector = new ArchiveInspector(null);
 
   aiEngine = new AIEngine({
     configManager,
@@ -40,19 +45,20 @@ function initServices() {
     fileManager,
     terminalExecutor,
     workspaceScanner,
-    webIntelligence
+    webIntelligence,
+    archiveInspector
   });
 
-  // Wire Terminal Human-In-The-Loop Confirmation
-  terminalExecutor.setConfirmCallback((req) => {
+  // Unified Human-In-The-Loop Approval Callback for Terminal & External Paths
+  const handleApprovalRequest = (req) => {
     return new Promise((resolve) => {
-      // If Security Mode is configured as "full-access", auto-approve immediately without prompting!
       const currentCfg = configManager.getConfig();
       if (currentCfg.security && currentCfg.security.mode === 'full-access') {
+        const desc = req.type === 'EXTERNAL_PATH' ? `external path "${req.path}"` : `command "${req.command}"`;
         sendToRenderer('app:log', {
-          type: 'TERMINAL',
+          type: 'SECURITY',
           level: 'info',
-          message: `Auto-approved command (Full Access Mode): "${req.command}"`
+          message: `Auto-approved (Full Access Mode): ${desc}`
         });
         return resolve(true);
       }
@@ -65,10 +71,11 @@ function initServices() {
       const timer = setTimeout(() => {
         if (pendingConfirmations.has(req.id)) {
           pendingConfirmations.delete(req.id);
+          const desc = req.type === 'EXTERNAL_PATH' ? req.path : req.command;
           sendToRenderer('app:log', {
-            type: 'TERMINAL',
+            type: 'SECURITY',
             level: 'warning',
-            message: `Terminal confirmation for "${req.command}" expired after 60s.`
+            message: `Approval request for "${desc}" expired after 60s.`
           });
           resolve(false);
         }
@@ -84,7 +91,13 @@ function initServices() {
       // Notify renderer to display confirmation modal
       mainWindow.webContents.send('terminal:confirm-request', req);
     });
-  });
+  };
+
+  // Wire approval callbacks across all tools
+  terminalExecutor.setConfirmCallback(handleApprovalRequest);
+  fileManager.setConfirmCallback(handleApprovalRequest);
+  workspaceScanner.setConfirmCallback(handleApprovalRequest);
+  archiveInspector.setConfirmCallback(handleApprovalRequest);
 
   // Wire real-time terminal output streaming
   terminalExecutor.setOutputCallback((out) => {
@@ -118,6 +131,11 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  // Prevent any unhandled window.open from opening blank child windows
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' };
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -210,12 +228,83 @@ ipcMain.handle('workspace:get-structure', async () => {
 });
 
 // 3. AI Chat Message
-ipcMain.handle('ai:send-message', async (_, text) => {
-  if (!text || typeof text !== 'string') return { success: false, error: 'Empty message' };
+ipcMain.handle('ai:send-message', async (_, payload) => {
+  let userText = '';
+  let rawAttachments = [];
+
+  if (typeof payload === 'string') {
+    userText = payload;
+  } else if (payload && typeof payload === 'object') {
+    userText = payload.text || '';
+    rawAttachments = Array.isArray(payload.attachments) ? payload.attachments : [];
+  }
+
+  if (!userText.trim() && rawAttachments.length === 0) {
+    return { success: false, error: 'Empty message' };
+  }
+
+  // Process attachments: save non-image files / jars to <workspace>/uploads/
+  const processedAttachments = [];
+  const wsRoot = aiEngine.workspaceRoot || process.cwd();
+  const uploadsDir = path.join(wsRoot, 'uploads');
+
+  for (const att of rawAttachments) {
+    try {
+      const isImage = att.isImage || (att.type && att.type.startsWith('image/'));
+      let savedPath = null;
+      let buffer = null;
+
+      if (att.dataUrl && att.dataUrl.includes('base64,')) {
+        const base64Data = att.dataUrl.split('base64,')[1];
+        buffer = Buffer.from(base64Data, 'base64');
+      }
+
+      if (buffer) {
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        const safeName = path.basename(att.name || (isImage ? 'image.png' : 'file.bin'));
+        const targetFilePath = path.join(uploadsDir, safeName);
+        fs.writeFileSync(targetFilePath, buffer);
+        savedPath = path.relative(wsRoot, targetFilePath).replace(/\\/g, '/');
+
+        sendToRenderer('app:log', {
+          type: 'FILE_WRITE',
+          level: 'info',
+          message: `Saved uploaded attachment to workspace: ${savedPath} (${buffer.length} bytes)`
+        });
+      }
+
+      // If text file under 64KB, include text snippet
+      let textSnippet = null;
+      if (!isImage && buffer && buffer.length <= 64 * 1024) {
+        try {
+          const text = buffer.toString('utf8');
+          if (!/[\x00-\x08\x0E-\x1F]/.test(text.slice(0, 1000))) {
+            textSnippet = text.slice(0, 4000);
+          }
+        } catch (e) {}
+      }
+
+      processedAttachments.push({
+        name: att.name,
+        type: att.type,
+        size: att.size || (buffer ? buffer.length : 0),
+        isImage: isImage,
+        isBinary: !isImage && !textSnippet,
+        dataUrl: isImage ? att.dataUrl : null,
+        savedPath: savedPath || att.name,
+        textSnippet: textSnippet
+      });
+    } catch (attErr) {
+      console.error('Error saving attachment in main:', attErr);
+    }
+  }
 
   try {
     await aiEngine.chat({
-      userMessage: text,
+      userMessage: userText,
+      attachments: processedAttachments,
       onChunk: (chunk) => sendToRenderer('ai:stream-chunk', chunk),
       onToolStart: (data) => {
         sendToRenderer('ai:tool-start', data);
@@ -257,6 +346,7 @@ ipcMain.handle('ai:send-message', async (_, text) => {
 
 function getToolLogType(toolName) {
   switch (toolName) {
+    case 'inspect_jar': return 'ARCHIVE_INSPECT';
     case 'read_file': return 'FILE_READ';
     case 'write_file': return 'FILE_WRITE';
     case 'patch_file': return 'FILE_PATCH';

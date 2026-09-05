@@ -4,6 +4,7 @@ const path = require('path');
 class WorkspaceScanner {
   constructor(workspaceRoot = null, defaultIgnored = null) {
     this.workspaceRoot = workspaceRoot;
+    this.confirmCallback = null;
     this.defaultIgnored = defaultIgnored || [
       'target',
       '.gradle',
@@ -12,12 +13,17 @@ class WorkspaceScanner {
       'node_modules',
       '.vscode',
       'dist',
+      '.craft',
       '.DS_Store'
     ];
   }
 
   setWorkspaceRoot(root) {
     this.workspaceRoot = root;
+  }
+
+  setConfirmCallback(fn) {
+    this.confirmCallback = fn;
   }
 
   setIgnoredPatterns(patterns) {
@@ -87,21 +93,56 @@ class WorkspaceScanner {
   }
 
   /**
-   * Scans the workspace and builds an indented ASCII structure string.
+   * Scans the workspace or an external directory (with approval) and builds an indented ASCII structure string.
    * Max depth: 8 levels, Max items: 600 items.
    */
-  scan(maxDepth = 8, maxItems = 600) {
-    if (!this.workspaceRoot) {
+  async scan(targetPath = null, maxDepth = 8, maxItems = 600) {
+    let scanDir = this.workspaceRoot;
+
+    if (targetPath && typeof targetPath === 'string') {
+      if (path.isAbsolute(targetPath)) {
+        scanDir = path.resolve(targetPath);
+      } else if (this.workspaceRoot) {
+        scanDir = path.resolve(this.workspaceRoot, targetPath);
+      } else {
+        scanDir = path.resolve(process.cwd(), targetPath);
+      }
+
+      // Check external path
+      const isOutside = this.workspaceRoot 
+        ? !scanDir.startsWith(path.resolve(this.workspaceRoot))
+        : true;
+
+      if (isOutside && this.confirmCallback) {
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        const approved = await this.confirmCallback({
+          id: requestId,
+          type: 'EXTERNAL_PATH',
+          action: 'scan_directory',
+          path: scanDir,
+          description: `Scan directory structure: ${path.basename(scanDir)}`
+        });
+
+        if (!approved) {
+          return {
+            success: false,
+            error: `Access denied: User rejected scan of external directory: "${targetPath}"`
+          };
+        }
+      }
+    }
+
+    if (!scanDir) {
       return {
         success: false,
-        error: "No active workspace selected."
+        error: "No active workspace or target directory selected."
       };
     }
 
-    if (!fs.existsSync(this.workspaceRoot)) {
+    if (!fs.existsSync(scanDir)) {
       return {
         success: false,
-        error: `Workspace directory does not exist: ${this.workspaceRoot}`
+        error: `Target directory does not exist: ${scanDir}`
       };
     }
 
@@ -139,7 +180,7 @@ class WorkspaceScanner {
 
         const entry = entries[i];
         const fullPath = path.join(dir, entry.name);
-        const relPath = path.relative(this.workspaceRoot, fullPath);
+        const relPath = path.relative(scanDir, fullPath);
 
         if (this.isIgnored(entry.name, relPath, ignoreList)) {
           continue;
@@ -162,9 +203,9 @@ class WorkspaceScanner {
       return lines;
     };
 
-    const rootName = path.basename(this.workspaceRoot) || 'root';
+    const rootName = path.basename(scanDir) || 'root';
     const lines = [`📁 ${rootName}/`];
-    lines.push(...buildTree(this.workspaceRoot, 1, ''));
+    lines.push(...buildTree(scanDir, 1, ''));
 
     if (truncated) {
       lines.push(`... [Tree truncated after ${maxItems} items for brevity]`);
@@ -172,7 +213,7 @@ class WorkspaceScanner {
 
     return {
       success: true,
-      workspaceRoot: this.workspaceRoot,
+      workspaceRoot: scanDir,
       totalItemsScanned: itemCount,
       tree: lines.join('\n')
     };

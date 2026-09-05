@@ -46,6 +46,23 @@
         </div>
       </div>
 
+      <!-- Security & Permissions Section -->
+      <div class="form-group-section">
+        <div class="section-title">Security & Permissions</div>
+
+        <div class="form-field">
+          <label for="cfgSecurityMode">Execution Permission Mode</label>
+          <select id="cfgSecurityMode" class="form-select">
+            <option value="approval">Approval Required (Minta Izin Konfirmasi)</option>
+            <option value="full-access">Full Access (Otonom Penuh - Tanpa Izin)</option>
+          </select>
+          <span class="field-hint">
+            • <strong>Approval:</strong> Sistem akan memunculkan dialog konfirmasi sebelum terminal command atau path eksternal diakses.<br>
+            • <strong>Full Access:</strong> AI otomatis mengeksekusi terminal command dan mengakses path tanpa popup konfirmasi.
+          </span>
+        </div>
+      </div>
+
       <!-- Terminal -->
       <div class="form-group-section">
         <div class="section-title">Terminal Execution</div>
