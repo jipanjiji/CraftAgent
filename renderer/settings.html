@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Craft Agent</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="settings.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="settings-page-body">
+  <div class="settings-standalone-container">
+    <div class="settings-page-header">
+      <div class="header-left">
+        <h2>Configuration & Preferences</h2>
+        <p>Manage xKiro API Gateway connection, tool parameters, and workspace behavior.</p>
+      </div>
+    </div>
+
+    <div class="settings-content scrollable-form">
+      <!-- API Gateway -->
+      <div class="form-group-section">
+        <div class="section-title">xKiro API Gateway</div>
+
+        <div class="form-field">
+          <label for="cfgBaseUrl">Base URL</label>
+          <input type="text" id="cfgBaseUrl" placeholder="https://api.xkiro.com/v1" />
+          <span class="field-hint">Default: https://api.xkiro.com/v1</span>
+        </div>
+
+        <div class="form-field">
+          <label for="cfgApiKey">API Key</label>
+          <div class="password-field">
+            <input type="password" id="cfgApiKey" placeholder="Enter your xKiro API key..." />
+            <button type="button" id="btnToggleApiKey" class="btn-text-sm">Show</button>
+          </div>
+          <span class="field-hint">Your API key is stored locally in your app profile.</span>
+        </div>
+
+        <div class="form-field">
+          <label for="cfgModel">Model Selection (100+ Models Available)</label>
+          <select id="cfgModel" class="form-select"></select>
+          <span class="field-hint">Default: openai/gpt-5.6-terra</span>
+        </div>
+      </div>
+
+      <!-- Terminal -->
+      <div class="form-group-section">
+        <div class="section-title">Terminal Execution</div>
+
+        <div class="form-field">
+          <label for="cfgDefaultTimeout">Default Timeout: <strong id="timeoutValLabel">60s</strong></label>
+          <input type="range" id="cfgDefaultTimeout" min="10" max="600" step="5" value="60" />
+          <span class="field-hint">Default 60 seconds. AI can self-adjust for heavy compilation or file transfers.</span>
+        </div>
+
+        <div class="form-field">
+          <label for="cfgShell">Default Shell</label>
+          <select id="cfgShell" class="form-select">
+            <option value="powershell">PowerShell (Recommended for Windows)</option>
+            <option value="cmd">Command Prompt (cmd.exe)</option>
+            <option value="bash">Bash</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- File Manager -->
+      <div class="form-group-section">
+        <div class="section-title">File Management & Ignored Patterns</div>
+
+        <div class="form-field">
+          <label for="cfgMaxReadSize">Max File Read Size: <strong id="readSizeLabel">500 KB</strong></label>
+          <input type="range" id="cfgMaxReadSize" min="64000" max="2000000" step="32000" value="512000" />
+        </div>
+
+        <div class="form-field">
+          <label for="cfgIgnoredFolders">Ignored Patterns</label>
+          <textarea id="cfgIgnoredFolders" rows="3" placeholder="target, .gradle, .git, node_modules, build, *.jar"></textarea>
+          <span class="field-hint">Comma-separated patterns to ignore during workspace scans.</span>
+        </div>
+      </div>
+
+      <!-- Token Sliding Window -->
+      <div class="form-group-section">
+        <div class="section-title">Token Sliding Window</div>
+
+        <div class="form-field">
+          <label for="cfgMaxMessages">Max Sliding Window Messages: <strong id="historySizeLabel">15 messages</strong></label>
+          <input type="range" id="cfgMaxMessages" min="5" max="35" step="1" value="15" />
+          <span class="field-hint">Keeps the most recent N messages to maintain optimal token efficiency.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-footer">
+      <button id="btnResetSettings" class="btn btn-secondary">Reset to Defaults</button>
+      <div class="footer-actions-right">
+        <button id="btnSaveSettings" class="btn btn-primary">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

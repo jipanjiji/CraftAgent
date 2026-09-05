@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Craft Agent</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Navigation Bar -->
+    <header class="top-bar">
+      <div class="brand-section">
+        <button id="btnToggleSidebar" class="icon-button" title="Chat Sessions History">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+
+        <div class="brand-logo">
+          <img src="assets/logo.png" alt="Craft Agent" class="brand-logo-img">
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">Craft Agent</span>
+          <span class="brand-badge">Autonomous</span>
+        </div>
+      </div>
+
+      <div class="workspace-section">
+        <button id="btnSelectWorkspace" class="btn-workspace" title="Select Project Workspace Folder">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span id="workspacePathLabel">No Workspace Selected — Click to open folder</span>
+        </button>
+      </div>
+
+      <div class="top-actions">
+        <button id="btnNewChat" class="btn btn-sm btn-new-chat" title="Create New Chat Session">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>New Chat</span>
+        </button>
+
+        <div class="model-badge" id="currentModelBadge" title="Active Model">
+          <span class="model-dot"></span>
+          <span id="currentModelName">gpt-5.6-terra</span>
+        </div>
+
+        <button id="btnToggleConsole" class="icon-button" title="Toggle Console Log (Hide/Show)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+        </button>
+
+        <button id="btnClearChat" class="icon-button" title="Clear Current Chat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+
+        <button id="btnOpenSettings" class="icon-button" title="Settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- App Body Area with Sessions Drawer -->
+    <div class="app-body-layout">
+      <!-- Sessions Drawer Sidebar (collapsible) -->
+      <aside class="sessions-sidebar" id="sessionsSidebar">
+        <div class="sessions-top">
+          <span class="sessions-title">Chat Sessions</span>
+          <button id="btnNewChatSidebar" class="btn-icon-sm" title="New Chat">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="sessions-list" id="sessionsList">
+          <!-- Populated dynamically -->
+        </div>
+      </aside>
+
+      <!-- Main Split Area -->
+      <main class="main-split-view" id="mainSplitView">
+        <!-- Left Panel: Chat Interface -->
+        <section class="panel panel-chat" id="chatPanel">
+          <div class="chat-messages-container" id="chatMessages">
+            <!-- Welcome Screen (Shown when empty) -->
+            <div class="welcome-screen" id="welcomeScreen">
+              <div class="welcome-icon">
+                <img src="assets/logo.png" alt="Craft Agent" class="welcome-logo-img">
+              </div>
+              <h2>Welcome to Craft Agent</h2>
+              <p>Autonomous AI assistant for Minecraft plugins (Paper/Spigot/Folia) and modern development.</p>
+
+              <div class="quick-chips">
+                <button class="chip" data-prompt="Scan this workspace structure and tell me what project this is.">
+                  📁 Scan Workspace
+                </button>
+                <button class="chip" data-prompt="Create a Paper 1.20+ PlayerJoinEvent plugin using Gradle (build.gradle) with gradlew.">
+                  ⚡ Create Plugin (Gradle)
+                </button>
+                <button class="chip" data-prompt="Compile this project using './gradlew build' to produce a jar.">
+                  🔨 Build Jar with Gradle
+                </button>
+                <button class="chip" data-prompt="Tolong installin Maven di Windows.">
+                  📦 Install Maven (winget)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Centered Input Box -->
+          <div class="chat-input-area">
+            <div class="chat-input-container">
+              <div class="input-wrapper">
+                <textarea 
+                  id="chatInput" 
+                  placeholder="Ask Craft Agent to inspect code, build plugins, run commands..." 
+                  rows="1"
+                ></textarea>
+                <button id="btnSendMessage" class="btn-send" title="Send Message (Ctrl+Enter)">
+                  <svg id="iconSend" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                  <svg id="iconStop" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                    <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                  </svg>
+                </button>
+              </div>
+              <div class="input-footer">
+                <span class="shortcut-tip">Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for newline</span>
+                <span class="memory-badge" title="Sliding window context size">15-msg Sliding Window</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Split Divider / Drag Handle -->
+        <div class="split-divider" id="splitDivider"></div>
+
+        <!-- Right Panel: Console Log -->
+        <section class="panel panel-console" id="consolePanel">
+          <div class="console-header">
+            <div class="console-title-area">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 17 10 11 4 5"></polyline>
+                <line x1="12" y1="19" x2="20" y2="19"></line>
+              </svg>
+              <span class="console-title">Console Activity Log</span>
+              <span class="log-count" id="logCount">0 events</span>
+            </div>
+
+            <div class="console-controls">
+              <select id="logFilter" class="select-sm">
+                <option value="ALL">All Events</option>
+                <option value="FILE">File Operations</option>
+                <option value="TERMINAL">Terminal</option>
+                <option value="WEB">Web Intelligence</option>
+                <option value="WORKSPACE">Workspace</option>
+              </select>
+              <button id="btnClearLog" class="btn-icon-sm" title="Clear console log">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                </svg>
+              </button>
+              <button id="btnCollapseConsole" class="btn-icon-sm" title="Hide Console Log">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="console-body" id="consoleLogs">
+            <div class="console-empty">
+              <span>Waiting for workspace activity & tool operations...</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Terminal Human-In-The-Loop Confirmation Modal -->
+    <div class="modal-overlay" id="terminalConfirmModal" style="display: none;">
+      <div class="modal-card modal-terminal">
+        <div class="modal-header">
+          <div class="modal-badge-danger">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>Terminal Command Approval</span>
+          </div>
+          <div class="timer-countdown" id="confirmCountdown">60s</div>
+        </div>
+
+        <div class="modal-body">
+          <p class="modal-desc">
+            Craft Agent requests permission to execute the following shell command in your workspace directory:
+          </p>
+
+          <div class="terminal-command-preview">
+            <div class="cmd-top">
+              <span class="cmd-cwd" id="confirmCwd">/workspace</span>
+              <span class="cmd-timeout" id="confirmTimeout">Timeout: 60s</span>
+            </div>
+            <pre><code id="confirmCommandText">.\gradlew build</code></pre>
+          </div>
+
+          <p class="modal-subtext">
+            ⚠️ Only approve commands you trust. Execution runs on your local machine.
+          </p>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btnDenyTerminal" class="btn btn-secondary">
+            Deny Execution (No)
+          </button>
+          <button id="btnApproveTerminal" class="btn btn-primary-gradient">
+            Approve & Execute (Yes)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal" style="display: none;">
+      <div class="modal-card modal-settings">
+        <div class="modal-header">
+          <h3>Settings & Preferences</h3>
+          <button id="btnCloseSettings" class="btn-close">&times;</button>
+        </div>
+
+        <div class="modal-body scrollable-form">
+          <!-- API Section -->
+          <div class="form-group-section">
+            <div class="section-title">xKiro API Gateway</div>
+
+            <div class="form-field">
+              <label for="cfgBaseUrl">Base URL</label>
+              <input type="text" id="cfgBaseUrl" placeholder="https://api.xkiro.com/v1" />
+              <span class="field-hint">Default: https://api.xkiro.com/v1</span>
+            </div>
+
+            <div class="form-field">
+              <label for="cfgApiKey">API Key</label>
+              <div class="password-field">
+                <input type="password" id="cfgApiKey" placeholder="Enter your xKiro API key..." />
+                <button type="button" id="btnToggleApiKey" class="btn-text-sm">Show</button>
+              </div>
+              <span class="field-hint">Your API key is stored securely in your local profile.</span>
+            </div>
+
+            <div class="form-field">
+              <label for="cfgModel">Model Selection (100+ Available)</label>
+              <input type="text" id="cfgModelSearch" placeholder="🔍 Search models (e.g. deepseek, claude, gpt, flash)..." class="model-search-input" />
+              <select id="cfgModel" class="form-select">
+                <!-- Populated dynamically with optgroups for all vendors -->
+              </select>
+              <span class="field-hint" id="modelSearchHint">Default: openai/gpt-5.6-terra (best balance of speed, cost & tool calling)</span>
+            </div>
+          </div>
+
+          <!-- Security & Permissions Section -->
+          <div class="form-group-section">
+            <div class="section-title">Security & Permissions</div>
+
+            <div class="form-field">
+              <label for="cfgSecurityMode">Execution Permission Mode</label>
+              <select id="cfgSecurityMode" class="form-select">
+                <option value="approval">Approval Required (Minta Izin Konfirmasi)</option>
+                <option value="full-access">Full Access (Otonom Penuh - Tanpa Izin)</option>
+              </select>
+              <span class="field-hint" id="securityModeHint">
+                • <strong>Approval:</strong> Sistem akan memunculkan dialog konfirmasi (Yes/No) sebelum setiap command dijalankan (Sangat Aman).<br>
+                • <strong>Full Access:</strong> AI otomatis mengeksekusi terminal command tanpa perlu popup konfirmasi (Lebih Cepat & Otonom Penuh).
+              </span>
+            </div>
+          </div>
+
+          <!-- Terminal Section -->
+          <div class="form-group-section">
+            <div class="section-title">Terminal Execution</div>
+
+            <div class="form-field">
+              <label for="cfgDefaultTimeout">Default Command Timeout: <strong id="timeoutValLabel">60s</strong></label>
+              <input type="range" id="cfgDefaultTimeout" min="10" max="600" step="5" value="60" />
+              <span class="field-hint">AI can automatically increase this when running heavy tasks like 1GB transfers or builds.</span>
+            </div>
+
+            <div class="form-field">
+              <label for="cfgShell">Default Shell</label>
+              <select id="cfgShell" class="form-select">
+                <option value="powershell">PowerShell (Recommended for Windows)</option>
+                <option value="cmd">Command Prompt (cmd.exe)</option>
+                <option value="bash">Bash (Linux / macOS / Git Bash)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- File Manager Section -->
+          <div class="form-group-section">
+            <div class="section-title">File Management & Ignored Items</div>
+
+            <div class="form-field">
+              <label for="cfgMaxReadSize">Max Read Size: <strong id="readSizeLabel">500 KB</strong></label>
+              <input type="range" id="cfgMaxReadSize" min="64000" max="2000000" step="32000" value="512000" />
+              <span class="field-hint">Prevents massive files from consuming AI context tokens.</span>
+            </div>
+
+            <div class="form-field">
+              <label for="cfgIgnoredFolders">Ignored Patterns (Workspace Scanner)</label>
+              <textarea id="cfgIgnoredFolders" rows="3" placeholder="target, .gradle, .idea, .git, node_modules, .vscode, dist"></textarea>
+              <span class="field-hint">Comma-separated patterns to ignore during scans (also respects workspace .forgeignore).</span>
+            </div>
+          </div>
+
+          <!-- History & Sliding Window -->
+          <div class="form-group-section">
+            <div class="section-title">Token Sliding Window</div>
+
+            <div class="form-field">
+              <label for="cfgMaxMessages">Max Sliding Window Messages: <strong id="historySizeLabel">15 messages</strong></label>
+              <input type="range" id="cfgMaxMessages" min="5" max="35" step="1" value="15" />
+              <span class="field-hint">Keeps the most recent N messages to maintain optimal token efficiency.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btnResetSettings" class="btn btn-secondary">Reset to Defaults</button>
+          <div class="actions-right">
+            <button id="btnCancelSettings" class="btn btn-secondary">Cancel</button>
+            <button id="btnSaveSettings" class="btn btn-primary">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

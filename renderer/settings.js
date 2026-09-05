@@ -1,0 +1,121 @@
+// Settings Page Script
+document.addEventListener('DOMContentLoaded', async () => {
+  const cfgBaseUrl = document.getElementById('cfgBaseUrl');
+  const cfgApiKey = document.getElementById('cfgApiKey');
+  const btnToggleApiKey = document.getElementById('btnToggleApiKey');
+  const cfgModel = document.getElementById('cfgModel');
+  const cfgDefaultTimeout = document.getElementById('cfgDefaultTimeout');
+  const timeoutValLabel = document.getElementById('timeoutValLabel');
+  const cfgShell = document.getElementById('cfgShell');
+  const cfgMaxReadSize = document.getElementById('cfgMaxReadSize');
+  const readSizeLabel = document.getElementById('readSizeLabel');
+  const cfgIgnoredFolders = document.getElementById('cfgIgnoredFolders');
+  const cfgMaxMessages = document.getElementById('cfgMaxMessages');
+  const historySizeLabel = document.getElementById('historySizeLabel');
+  const btnSaveSettings = document.getElementById('btnSaveSettings');
+  const btnResetSettings = document.getElementById('btnResetSettings');
+
+  let currentSettings = null;
+
+  async function loadSettings() {
+    try {
+      const catalog = await window.craftAgent.getModelsCatalog();
+      cfgModel.innerHTML = '';
+      for (const [vendor, models] of Object.entries(catalog)) {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = vendor;
+        models.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = `${m.name} (${m.id})`;
+          optgroup.appendChild(opt);
+        });
+        cfgModel.appendChild(optgroup);
+      }
+
+      currentSettings = await window.craftAgent.getSettings();
+      populateUI(currentSettings);
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  }
+
+  function populateUI(cfg) {
+    if (!cfg) return;
+    cfgBaseUrl.value = cfg.api.baseUrl || 'https://api.xkiro.com/v1';
+    cfgApiKey.value = cfg.api.apiKey || '';
+    if (cfg.api.model) cfgModel.value = cfg.api.model;
+    cfgDefaultTimeout.value = cfg.terminal.defaultTimeout || 60;
+    timeoutValLabel.textContent = `${cfgDefaultTimeout.value}s`;
+    cfgShell.value = cfg.terminal.shell || 'powershell';
+    cfgMaxReadSize.value = cfg.fileManager.maxReadSize || 512000;
+    readSizeLabel.textContent = `${Math.round(cfgMaxReadSize.value / 1024)} KB`;
+    cfgMaxMessages.value = cfg.history.maxMessages || 15;
+    historySizeLabel.textContent = `${cfgMaxMessages.value} messages`;
+    cfgIgnoredFolders.value = (cfg.ignoredFolders || []).join(', ');
+  }
+
+  btnToggleApiKey.addEventListener('click', () => {
+    if (cfgApiKey.type === 'password') {
+      cfgApiKey.type = 'text';
+      btnToggleApiKey.textContent = 'Hide';
+    } else {
+      cfgApiKey.type = 'password';
+      btnToggleApiKey.textContent = 'Show';
+    }
+  });
+
+  cfgDefaultTimeout.addEventListener('input', () => {
+    timeoutValLabel.textContent = `${cfgDefaultTimeout.value}s`;
+  });
+
+  cfgMaxReadSize.addEventListener('input', () => {
+    readSizeLabel.textContent = `${Math.round(cfgMaxReadSize.value / 1024)} KB`;
+  });
+
+  cfgMaxMessages.addEventListener('input', () => {
+    historySizeLabel.textContent = `${cfgMaxMessages.value} messages`;
+  });
+
+  btnSaveSettings.addEventListener('click', async () => {
+    const ignoredArr = cfgIgnoredFolders.value
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const updated = {
+      api: {
+        baseUrl: cfgBaseUrl.value.trim() || 'https://api.xkiro.com/v1',
+        apiKey: cfgApiKey.value.trim(),
+        model: cfgModel.value
+      },
+      terminal: {
+        defaultTimeout: parseInt(cfgDefaultTimeout.value, 10) || 60,
+        shell: cfgShell.value
+      },
+      fileManager: {
+        maxReadSize: parseInt(cfgMaxReadSize.value, 10) || 512000
+      },
+      history: {
+        maxMessages: parseInt(cfgMaxMessages.value, 10) || 15
+      },
+      ignoredFolders: ignoredArr
+    };
+
+    const res = await window.craftAgent.saveSettings(updated);
+    if (res.success) {
+      alert('Settings saved successfully!');
+    } else {
+      alert('Failed to save settings: ' + res.error);
+    }
+  });
+
+  btnResetSettings.addEventListener('click', async () => {
+    if (confirm('Reset to factory default settings?')) {
+      const reset = await window.craftAgent.resetSettings();
+      populateUI(reset);
+    }
+  });
+
+  loadSettings();
+});

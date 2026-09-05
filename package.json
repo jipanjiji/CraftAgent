@@ -1,0 +1,64 @@
+{
+  "name": "craft-agent",
+  "version": "1.0.0",
+  "description": "Autonomous AI coding assistant desktop app for Minecraft plugin development & general programming",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "test": "node test-suite.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.craftagent.app",
+    "productName": "Craft Agent",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "renderer/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Craft Agent"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*"
+    ]
+  },
+  "keywords": [
+    "ai",
+    "minecraft",
+    "coding-agent",
+    "electron",
+    "xkiro"
+  ],
+  "author": "Alvin",
+  "license": "MIT",
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "openai": "^4.86.1"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^26.15.3"
+  }
+}

@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Electron-builder unpacked binaries & metadata (we keep the final standalone .exe files)
+release/win-unpacked/
+release/*.blockmap
+release/builder-debug.yml
+builder-effective-config.yaml
+
+# Runtime & Environment
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# System & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local scratch scripts
+scratch/
