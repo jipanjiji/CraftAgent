@@ -14,7 +14,7 @@
 
 <br>
 
-[📥 **Download Portable Executable (.exe)**](release/Craft%20Agent%201.0.0.exe) &nbsp;•&nbsp; [💾 **Download Windows Installer (.exe)**](release/Craft%20Agent%20Setup%201.0.0.exe) &nbsp;•&nbsp; [📖 **Documentation**](#-getting-started)
+[📥 **Download Portable Executable (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.0/Craft.Agent.1.0.0.exe) &nbsp;•&nbsp; [💾 **Download Windows Installer (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.0/Craft.Agent.Setup.1.0.0.exe) &nbsp;•&nbsp; [🚀 **Latest Release (v1.0.0)**](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.0)
 
 </div>
 
@@ -30,12 +30,12 @@ Whether you need to scaffold a Paper 1.20+ teleportation plugin, build productio
 
 ## 🚀 Instant Download (Ready-to-Use)
 
-No Node.js or development environment needed! Simply download the standalone Windows build:
+No Node.js or development environment needed! Simply download the standalone Windows build from the [v1.0.0 Release](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.0):
 
 | Package Type | File Name | Description |
 | :--- | :--- | :--- |
-| **⭐ Portable Executable** | [`Craft Agent 1.0.0.exe`](release/Craft%20Agent%201.0.0.exe) | **Zero installation required.** Double-click to run immediately anywhere (USB, Google Drive, Desktop). |
-| **Windows Installer** | [`Craft Agent Setup 1.0.0.exe`](release/Craft%20Agent%20Setup%201.0.0.exe) | Complete setup wizard with Desktop shortcuts and Start Menu integration. |
+| **⭐ Portable Executable** | [**`Craft.Agent.1.0.0.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.0/Craft.Agent.1.0.0.exe) | **Zero installation required.** Double-click to run immediately anywhere (USB, Google Drive, Desktop). |
+| **Windows Installer** | [**`Craft.Agent.Setup.1.0.0.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.0/Craft.Agent.Setup.1.0.0.exe) | Complete setup wizard with Desktop shortcuts and Start Menu integration. |
 
 ---
 
