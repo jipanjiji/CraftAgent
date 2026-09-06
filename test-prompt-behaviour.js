@@ -18,6 +18,7 @@
  * Membutuhkan API key xKiro yang valid di environment variable XKIRO_API_KEY.
  */
 
+const path = require('path');
 const { OpenAI } = require('openai');
 const { getSystemPrompt } = require('./src/system-prompt');
 const { TOOLS_SCHEMA } = require('./src/ai-engine');
@@ -27,9 +28,13 @@ let API_KEY = process.env.XKIRO_API_KEY || '';
 let BASE_URL = process.env.XKIRO_BASE_URL || '';
 let DEFAULT_MODEL = process.env.TEST_MODEL || '';
 
-// Auto-fallback membaca config yang sudah tersimpan di Craft Agent
+// Auto-fallback membaca config yang sudah tersimpan di Craft Agent (baik di workspace maupun di AppData)
 try {
-    const cfg = new ConfigManager().getConfig();
+    const appDataPath = process.env.APPDATA ? path.join(process.env.APPDATA, 'craft-agent') : null;
+    let cfg = new ConfigManager().getConfig();
+    if ((!cfg?.api?.apiKey || cfg.api.apiKey.trim() === '') && appDataPath) {
+        cfg = new ConfigManager(appDataPath).getConfig();
+    }
     if (!API_KEY && cfg?.api?.apiKey) API_KEY = cfg.api.apiKey.trim();
     if (!BASE_URL && cfg?.api?.baseUrl) BASE_URL = cfg.api.baseUrl.trim();
     if (!DEFAULT_MODEL && cfg?.api?.model) DEFAULT_MODEL = cfg.api.model.trim();
