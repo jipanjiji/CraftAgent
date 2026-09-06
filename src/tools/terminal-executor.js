@@ -54,6 +54,34 @@ function isDestructiveCommand(command) {
   return { isDangerous: false };
 }
 
+/**
+ * Safely converts unquoted '&&' operators to ';' for Windows PowerShell 5.1 compatibility.
+ * Standard Windows PowerShell 5.1 throws a ParserError on '&&'.
+ */
+function sanitizePowerShellChaining(command) {
+  if (!command || typeof command !== 'string' || !command.includes('&&')) {
+    return command;
+  }
+  let inDouble = false;
+  let inSingle = false;
+  let result = '';
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    if (char === '"' && !inSingle) inDouble = !inDouble;
+    else if (char === "'" && !inDouble) inSingle = !inSingle;
+    else if (!inDouble && !inSingle && char === '&' && command[i + 1] === '&') {
+      result = result.replace(/\s+$/, '');
+      result += '; ';
+      i++; // skip second '&'
+      // Skip whitespace immediately following '&&'
+      while (command[i + 1] === ' ') i++;
+      continue;
+    }
+    result += char;
+  }
+  return result;
+}
+
 class TerminalExecutor {
   constructor(workspaceRoot = null, defaultTimeout = 60, shell = 'powershell') {
     this.workspaceRoot = workspaceRoot;
@@ -152,9 +180,10 @@ class TerminalExecutor {
         shellExecutable = 'cmd.exe';
         shellArgs = ['/c', effectiveCommand];
       } else {
-        // Default PowerShell
+        // Default PowerShell: sanitize '&&' chaining to ';' for Windows PowerShell 5.1 compatibility
+        const psCommand = sanitizePowerShellChaining(effectiveCommand);
         shellExecutable = 'powershell.exe';
-        shellArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', effectiveCommand];
+        shellArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand];
       }
     } else {
       shellExecutable = '/bin/bash';
@@ -303,4 +332,4 @@ class TerminalExecutor {
   }
 }
 
-module.exports = { TerminalExecutor, isDestructiveCommand };
+module.exports = { TerminalExecutor, isDestructiveCommand, sanitizePowerShellChaining };

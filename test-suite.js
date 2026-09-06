@@ -5,7 +5,7 @@ const path = require('path');
 const { ConfigManager, MODELS_CATALOG } = require('./src/config-manager');
 const { FileManager } = require('./src/tools/file-manager');
 const { WorkspaceScanner } = require('./src/tools/workspace-scanner');
-const { TerminalExecutor, isDestructiveCommand } = require('./src/tools/terminal-executor');
+const { TerminalExecutor, isDestructiveCommand, sanitizePowerShellChaining } = require('./src/tools/terminal-executor');
 const { HistoryManager, pruneToolContent, estimateTokens } = require('./src/history-manager');
 const { WorkspaceMemory } = require('./src/workspace-memory');
 const { WebIntelligence } = require('./src/tools/web-intelligence');
@@ -234,9 +234,21 @@ async function runTests() {
     capturedDanger = req.isDangerous;
     return false;
   });
+  // Test Destructive Command Scanner & Warning Badge integration
   await term.executeCommand('rm -rf ./important_source');
   assert.strictEqual(capturedDanger, true, 'req.isDangerous must be passed to terminal confirm modal');
   console.log('  ✓ Destructive Command Scanner & Warning Badge integration verified.');
+
+  // Test PowerShell 5.1 && to ; chaining sanitizer
+  assert.strictEqual(
+    sanitizePowerShellChaining('cd SusWatch && .\\gradlew.bat build --no-daemon'),
+    'cd SusWatch; .\\gradlew.bat build --no-daemon'
+  );
+  assert.strictEqual(
+    sanitizePowerShellChaining('echo "hello && world" && dir'),
+    'echo "hello && world"; dir'
+  );
+  console.log('  ✓ PowerShell 5.1 && to ; chaining sanitizer verified.');
 
   // 6. Memory System Harness: Tool Pruning, Token Budgeting, Rolling Summarizer, and Workspace Memory
   console.log('\nTesting Memory System Harness...');

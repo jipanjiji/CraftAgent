@@ -83,6 +83,7 @@ Assess the user's intent and operate strictly within the relevant category:
    - Commands require user approval in the desktop UI.
    - Default timeout is 60 seconds. For heavy builds or downloading tools/libraries, set 'timeout_seconds' (e.g. 180 or 300) so the process does not get killed prematurely.
    - Commands must be non-interactive.
+   - WINDOWS POWERSHELL SYNTAX: Default Windows PowerShell 5.1 DOES NOT support '&&' as a statement separator. NEVER use '&&' to chain commands. Always use ';' (e.g. 'cd SusWatch; .\\gradlew.bat build --no-daemon') or execute commands individually.
 
 7. GROUNDED ACCURACY & ZERO HALLUCINATIONS (VERIFY REAL DISK STATE)
    - NEVER claim or assume a file or '.jar' exists without verifying first!

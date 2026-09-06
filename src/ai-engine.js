@@ -10,7 +10,7 @@ const TOOLS_SCHEMA = [
     type: "function",
     function: {
       name: "execute_terminal_command",
-      description: "Run a shell command in the workspace directory. Requires user confirmation in the desktop UI. You can specify timeout_seconds if the task is expected to take longer than 60s (e.g. long builds, downloading large libraries, or large file transfers).",
+      description: "Run a shell command in the workspace directory. Requires user confirmation in the desktop UI. In Windows PowerShell, do NOT use '&&' to chain commands (PowerShell 5.1 syntax error); use ';' instead (e.g. 'cd dir; .\\gradlew.bat build --no-daemon'). You can specify timeout_seconds if the task is expected to take longer than 60s (e.g. long builds, downloading large libraries, or large file transfers).",
       parameters: {
         type: "object",
         properties: {

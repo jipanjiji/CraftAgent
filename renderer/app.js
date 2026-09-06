@@ -472,9 +472,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    // Dismiss popups on Escape key
+    // Dismiss modals and popups on Escape key
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        const diffModal = document.getElementById('diffModal');
+        if (diffModal && diffModal.style.display !== 'none') {
+          diffModal.style.display = 'none';
+          currentActiveDiffData = null;
+          return;
+        }
+
+        const settingsModal = document.getElementById('settingsModal');
+        if (settingsModal && settingsModal.style.display !== 'none') {
+          settingsModal.style.display = 'none';
+          return;
+        }
+
+        const quotaModal = document.getElementById('quotaModal');
+        if (quotaModal && quotaModal.style.display !== 'none') {
+          quotaModal.style.display = 'none';
+          return;
+        }
+
+        const modrinthDetailModal = document.getElementById('modrinthDetailModal');
+        if (modrinthDetailModal && modrinthDetailModal.style.display !== 'none') {
+          modrinthDetailModal.style.display = 'none';
+          return;
+        }
+
         if (modelSelectPopup && modelSelectPopup.style.display !== 'none') {
           modelSelectPopup.style.display = 'none';
           if (btnSelectModelInput) btnSelectModelInput.classList.remove('active');
@@ -2077,6 +2102,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnCloseDiff) btnCloseDiff.onclick = closeDiff;
     if (btnCloseDiffBottom) btnCloseDiffBottom.onclick = closeDiff;
+
+    if (diffModal) {
+      diffModal.addEventListener('click', (e) => {
+        if (e.target === diffModal) closeDiff();
+      });
+    }
 
     if (btnDiffUnified) {
       btnDiffUnified.onclick = () => {
