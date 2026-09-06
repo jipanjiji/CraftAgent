@@ -520,14 +520,14 @@
             <div class="form-field">
               <label for="cfgSecurityMode">Execution Permission Mode</label>
               <select id="cfgSecurityMode" class="form-select">
-                <option value="approval">Ask for approval (Selalu Minta Izin Konfirmasi)</option>
-                <option value="approve-for-me">Approve for me (Hanya Minta Izin untuk Tindakan Berbahaya)</option>
-                <option value="full-access">Full Access (Otonom Penuh - Tanpa Izin)</option>
+                <option value="approval">Ask for approval (Prompt for all executions)</option>
+                <option value="approve-for-me">Approve for me (Prompt only for destructive actions)</option>
+                <option value="full-access">Full Access (Fully autonomous - no confirmation)</option>
               </select>
               <span class="field-hint" id="securityModeHint">
-                • <strong>Ask for approval:</strong> Sistem meminta konfirmasi untuk semua command terminal dan file eksternal.<br>
-                • <strong>Approve for me:</strong> Auto-approve command aman, hanya minta izin jika perintah terdeteksi destruktif atau akses path luar.<br>
-                • <strong>Full Access:</strong> AI otomatis mengeksekusi semua tindakan tanpa popup konfirmasi.
+                • <strong>Ask for approval:</strong> System prompts for confirmation before executing any terminal commands or accessing external paths.<br>
+                • <strong>Approve for me:</strong> Auto-approves safe commands, prompts only when destructive operations or external file paths are detected.<br>
+                • <strong>Full Access:</strong> AI autonomously executes all actions without popup confirmations.
               </span>
             </div>
           </div>
@@ -569,14 +569,35 @@
             </div>
           </div>
 
-          <!-- History & Sliding Window -->
+          <!-- Context Window & Token Budget Section -->
           <div class="form-group-section">
-            <div class="section-title">Token Sliding Window</div>
+            <div class="section-title">Context Window & Token Budget</div>
+
+            <div class="form-field">
+              <label for="cfgMaxTokenBudget">Max Context Window: <strong id="tokenBudgetFormattedLabel">64k tokens</strong></label>
+              <div class="token-budget-input-wrapper">
+                <input type="number" id="cfgMaxTokenBudget" min="8000" max="1000000" step="1000" placeholder="64000" />
+                <span class="token-budget-badge" id="tokenBudgetKBadge">64k</span>
+              </div>
+              <div class="token-presets-row" id="tokenPresetsRow">
+                <button type="button" class="btn-token-preset" data-tokens="16000">16k</button>
+                <button type="button" class="btn-token-preset" data-tokens="32000">32k</button>
+                <button type="button" class="btn-token-preset active" data-tokens="64000">64k (Default)</button>
+                <button type="button" class="btn-token-preset" data-tokens="128000">128k</button>
+                <button type="button" class="btn-token-preset" data-tokens="256000">256k</button>
+                <button type="button" class="btn-token-preset" data-tokens="512000">512k</button>
+                <button type="button" class="btn-token-preset" data-tokens="1000000">1M (Max)</button>
+              </div>
+              <span class="field-hint">
+                • <strong>Min:</strong> 8,000 (8k) &nbsp;|&nbsp; <strong>Default:</strong> 64,000 (64k) &nbsp;|&nbsp; <strong>Max:</strong> 1,000,000 (1M tokens).<br>
+                • Sets the maximum token accumulation budget of conversation history sent to the AI per turn.
+              </span>
+            </div>
 
             <div class="form-field">
               <label for="cfgMaxMessages">Max Sliding Window Messages: <strong id="historySizeLabel">15 messages</strong></label>
-              <input type="range" id="cfgMaxMessages" min="5" max="35" step="1" value="15" />
-              <span class="field-hint">Keeps the most recent N messages to maintain optimal token efficiency.</span>
+              <input type="range" id="cfgMaxMessages" min="5" max="50" step="1" value="15" />
+              <span class="field-hint">Number of recent conversation turns maintained in the sliding window.</span>
             </div>
           </div>
         </div>

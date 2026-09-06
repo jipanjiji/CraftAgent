@@ -89,6 +89,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cfgIgnoredFolders = document.getElementById('cfgIgnoredFolders');
   const cfgMaxMessages = document.getElementById('cfgMaxMessages');
   const historySizeLabel = document.getElementById('historySizeLabel');
+  const cfgMaxTokenBudget = document.getElementById('cfgMaxTokenBudget');
+  const tokenBudgetFormattedLabel = document.getElementById('tokenBudgetFormattedLabel');
+  const tokenBudgetKBadge = document.getElementById('tokenBudgetKBadge');
+  const tokenPresetsRow = document.getElementById('tokenPresetsRow');
 
   // Model Selector Pill & Floating Popup (Input Bar)
   const btnSelectModelInput = document.getElementById('btnSelectModelInput');
@@ -556,7 +560,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     cfgMaxMessages.value = cfg.history.maxMessages || 15;
     historySizeLabel.textContent = `${cfgMaxMessages.value} messages`;
 
+    const tokenBudget = (cfg.history && cfg.history.maxTokenBudget) ? cfg.history.maxTokenBudget : 64000;
+    updateTokenBudgetDisplay(tokenBudget);
+
     cfgIgnoredFolders.value = (cfg.ignoredFolders || []).join(', ');
+  }
+
+  function formatTokenBudget(val) {
+    const num = parseInt(val, 10) || 64000;
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(num % 1000000 === 0 ? 0 : 1)}M`;
+    }
+    return `${Math.round(num / 1000)}k`;
+  }
+
+  function updateTokenBudgetDisplay(val) {
+    let num = parseInt(val, 10);
+    if (isNaN(num)) num = 64000;
+    num = Math.max(8000, Math.min(1000000, num));
+    if (cfgMaxTokenBudget) cfgMaxTokenBudget.value = num;
+    const formattedK = formatTokenBudget(num);
+    if (tokenBudgetFormattedLabel) {
+      tokenBudgetFormattedLabel.textContent = `${formattedK} tokens (${num.toLocaleString()})`;
+    }
+    if (tokenBudgetKBadge) {
+      tokenBudgetKBadge.textContent = formattedK;
+    }
+    if (tokenPresetsRow) {
+      const btns = tokenPresetsRow.querySelectorAll('.btn-token-preset');
+      btns.forEach(btn => {
+        const btnVal = parseInt(btn.dataset.tokens, 10);
+        btn.classList.toggle('active', btnVal === num);
+      });
+    }
   }
 
   // 2. Chat Sessions Management (Lazy/Smart Session Persistence & History Sync)
@@ -1786,11 +1822,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     historySizeLabel.textContent = `${cfgMaxMessages.value} messages`;
   });
 
+  if (cfgMaxTokenBudget) {
+    cfgMaxTokenBudget.addEventListener('input', () => {
+      updateTokenBudgetDisplay(cfgMaxTokenBudget.value);
+    });
+    cfgMaxTokenBudget.addEventListener('change', () => {
+      let val = parseInt(cfgMaxTokenBudget.value, 10);
+      if (isNaN(val)) val = 64000;
+      val = Math.max(8000, Math.min(1000000, val));
+      cfgMaxTokenBudget.value = val;
+      updateTokenBudgetDisplay(val);
+    });
+  }
+
+  if (tokenPresetsRow) {
+    tokenPresetsRow.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-token-preset');
+      if (!btn) return;
+      const tokens = parseInt(btn.dataset.tokens, 10);
+      if (tokens) {
+        updateTokenBudgetDisplay(tokens);
+      }
+    });
+  }
+
   btnSaveSettings.addEventListener('click', async () => {
     const ignoredArr = cfgIgnoredFolders.value
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
+
+    let tokenBudget = cfgMaxTokenBudget ? parseInt(cfgMaxTokenBudget.value, 10) : 64000;
+    if (isNaN(tokenBudget)) tokenBudget = 64000;
+    tokenBudget = Math.max(8000, Math.min(1000000, tokenBudget));
 
     const updatedConfig = {
       api: {
@@ -1811,7 +1875,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         maxReadSize: parseInt(cfgMaxReadSize.value, 10) || 512000
       },
       history: {
-        maxMessages: parseInt(cfgMaxMessages.value, 10) || 15
+        maxMessages: parseInt(cfgMaxMessages.value, 10) || 15,
+        maxTokenBudget: tokenBudget
       },
       ignoredFolders: ignoredArr
     };
@@ -2949,31 +3014,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2. Return to chat interface
     closeDiscoverView();
 
-    // 3. Formulate audit prompt
-    const categories = project.categories ? project.categories.join(', ') : 'N/A';
-    const versions = project.versions ? project.versions.slice(0, 10).join(', ') : 'N/A';
-    const verDetail = selectedVersion 
-      ? `Versi Terpilih: ${selectedVersion.name} (${selectedVersion.version_number}) | Loaders: ${(selectedVersion.loaders || []).join(', ')}` 
-      : `Versi Terbaru: ${project.latest_version || 'Latest'}`;
+    // 3. Formulate /analyze command prompt with Modrinth URL
+    const projectType = project.project_type || currentDiscoverType || 'plugin';
+    let projectUrl = `https://modrinth.com/${projectType}/${project.slug}`;
+    if (selectedVersion && selectedVersion.version_number) {
+      projectUrl += `/version/${selectedVersion.version_number}`;
+    }
 
-    const promptText = `Tolong lakukan audit keamanan, fungsionalitas, dan analisa komprehensif untuk ${project.project_type || 'plugin/mod'} Minecraft berikut:
-
-**Project Details**:
-- **Nama**: ${project.title}
-- **Author**: ${project.author}
-- **Slug / ID**: ${project.slug}
-- **Tipe Project**: ${project.project_type || currentDiscoverType}
-- **Kategori / Loaders**: ${categories}
-- **Versi Minecraft**: ${versions}
-- **${verDetail}**
-- **Ringkasan**: ${project.description}
-
-**Mohon berikan laporan audit terstruktur mencakup**:
-1. **Keamanan & Integritas**: Apakah ada risiko kode berbahaya, izin berbahaya, file access tak wajar, atau endpoint eksternal?
-2. **Daftar Fitur & Mekanik**: Apa saja fitur utama, commands, dan fungsionalitas yang ditambahkan?
-3. **Performa & Dampak Server**: Efisiensi TPS/tick, memori footprint, dan apakah mendukung asynchronous/Folia.
-4. **Kompatibilitas Platform**: Kecocokan platform (Paper, Purpur, Spigot, Fabric, Forge) dan dependensi yang dibutuhkan.
-5. **Panduan Konfigurasi**: Rekomendasi pengaturan awal dan permissions penting untuk server admin.`;
+    const promptText = `/analyze ${projectUrl}`;
 
     // 4. Send directly to AI
     const chatInput = document.getElementById('chatInput');

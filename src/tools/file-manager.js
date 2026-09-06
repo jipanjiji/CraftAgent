@@ -398,6 +398,43 @@ class FileManager {
       };
     }
   }
+
+  /**
+   * Deletes a file or directory inside the workspace (or external path if approved).
+   */
+  async deleteFile(relativePath) {
+    try {
+      const fullPath = await this.resolvePathWithApproval(relativePath, 'delete_file');
+      if (!fs.existsSync(fullPath)) {
+        return {
+          success: false,
+          error: `File does not exist: ${relativePath}`
+        };
+      }
+
+      const stat = fs.statSync(fullPath);
+      if (stat.isDirectory()) {
+        fs.rmSync(fullPath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(fullPath);
+      }
+
+      const displayPath = this.workspaceRoot && fullPath.startsWith(path.resolve(this.workspaceRoot))
+        ? path.relative(this.workspaceRoot, fullPath)
+        : fullPath;
+
+      return {
+        success: true,
+        path: displayPath,
+        message: `Successfully deleted "${displayPath}"`
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: `Delete error: ${err.message}`
+      };
+    }
+  }
 }
 
 module.exports = { FileManager };

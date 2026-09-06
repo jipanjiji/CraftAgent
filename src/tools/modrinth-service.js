@@ -6,7 +6,7 @@ class ModrinthService {
   constructor(workspaceRoot = null) {
     this.workspaceRoot = workspaceRoot;
     this.baseUrl = 'https://api.modrinth.com/v2';
-    this.userAgent = 'CraftAgent/1.0.5 (Minecraft Dev Pair Programmer)';
+    this.userAgent = 'CraftAgent/1.0.6 (Minecraft Dev Pair Programmer)';
   }
 
   setWorkspaceRoot(root) {
@@ -200,6 +200,95 @@ class ModrinthService {
 
       req.on('error', reject);
     });
+  }
+
+  /**
+   * Fetches a project's artifact (.jar) into .craft/temp/ for AI auditing.
+   * Accepts Modrinth URL (e.g. https://modrinth.com/plugin/provanish) or slug.
+   */
+  async fetchArtifactForAnalysis(urlOrSlug, versionNumber = null) {
+    if (!urlOrSlug || typeof urlOrSlug !== 'string') {
+      throw new Error('Invalid URL or slug provided for analysis.');
+    }
+
+    let clean = urlOrSlug.trim();
+    // Extract slug from URL like https://modrinth.com/plugin/provanish or https://modrinth.com/mod/sodium
+    const match = clean.match(/modrinth\.com\/(?:plugin|mod|datapack|resourcepack|shader|modpack)\/([a-zA-Z0-9_-]+)/i);
+    let slug = match ? match[1] : clean.replace(/^https?:\/\/[^/]+\//, '').replace(/[^a-zA-Z0-9_-]/g, '');
+
+    if (!slug) {
+      throw new Error(`Unable to extract project slug from "${urlOrSlug}".`);
+    }
+
+    // Check if version is specified in URL: e.g. /version/<ver>
+    let targetVerNumber = versionNumber;
+    const verMatch = clean.match(/\/version\/([a-zA-Z0-9._-]+)/i);
+    if (!targetVerNumber && verMatch) {
+      targetVerNumber = verMatch[1];
+    }
+
+    // 1. Fetch project info
+    const project = await this.getProject(slug);
+
+    // 2. Fetch versions
+    const versions = await this.getProjectVersions(slug);
+    if (!versions || versions.length === 0) {
+      throw new Error(`No downloadable versions found for project "${slug}".`);
+    }
+
+    // 3. Find requested or latest release version
+    let matchedVersion = null;
+    if (targetVerNumber) {
+      matchedVersion = versions.find(v => v.version_number === targetVerNumber || v.id === targetVerNumber || v.name === targetVerNumber);
+    }
+    if (!matchedVersion) {
+      matchedVersion = versions.find(v => v.version_type === 'release') || versions[0];
+    }
+
+    if (!matchedVersion || !matchedVersion.files || matchedVersion.files.length === 0) {
+      throw new Error(`No files found in version "${matchedVersion?.version_number || 'latest'}".`);
+    }
+
+    // 4. Find primary file (.jar preferred)
+    const primaryFile = matchedVersion.files.find(f => f.primary) || 
+                        matchedVersion.files.find(f => f.filename.endsWith('.jar')) || 
+                        matchedVersion.files[0];
+
+    // 5. Download into temporary folder (.craft/temp/)
+    const tempDir = this.workspaceRoot 
+      ? path.join(this.workspaceRoot, '.craft', 'temp') 
+      : path.join(process.cwd(), '.craft', 'temp');
+
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const downloaded = await this.downloadVersionFile({
+      fileUrl: primaryFile.url,
+      targetFilename: primaryFile.filename,
+      destinationPath: tempDir
+    });
+
+    const relPath = this.workspaceRoot && downloaded.fullPath.startsWith(path.resolve(this.workspaceRoot))
+      ? path.relative(this.workspaceRoot, downloaded.fullPath).replace(/\\/g, '/')
+      : downloaded.fullPath;
+
+    return {
+      success: true,
+      path: relPath,
+      absolute_path: downloaded.fullPath,
+      filename: downloaded.filename,
+      size_bytes: downloaded.sizeBytes,
+      project_title: project.title,
+      project_type: project.project_type,
+      project_slug: project.slug,
+      version_number: matchedVersion.version_number,
+      version_name: matchedVersion.name,
+      game_versions: matchedVersion.game_versions || [],
+      loaders: matchedVersion.loaders || [],
+      dependencies: matchedVersion.dependencies || [],
+      message: `Successfully downloaded "${downloaded.filename}" to "${relPath}" for audit. Now use "inspect_jar" with path "${relPath}" to inspect internal files and bytecode, then call "delete_file" with path "${relPath}" after analysis to clean up.`
+    };
   }
 }
 

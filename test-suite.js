@@ -40,7 +40,16 @@ async function runTests() {
   // Reload config from disk to verify persistence
   const reloadedMgr = new ConfigManager(testDir);
   assert.strictEqual(reloadedMgr.getConfig().security.mode, 'full-access', 'Reloaded config should persist full-access mode');
-  console.log('  ✓ Security mode (approval -> full-access) correctly saved and persisted to disk.');
+  assert.strictEqual(cfg.history.maxTokenBudget, 64000, 'Default maxTokenBudget should be 64000 (64k)');
+
+  // Test maxTokenBudget persistence & clamping (8k to 1M)
+  cfgMgr.saveConfig({ history: { maxTokenBudget: 128000 } });
+  assert.strictEqual(cfgMgr.getConfig().history.maxTokenBudget, 128000, 'maxTokenBudget should update to 128000');
+  cfgMgr.saveConfig({ history: { maxTokenBudget: 5000 } });
+  assert.strictEqual(cfgMgr.getConfig().history.maxTokenBudget, 8000, 'maxTokenBudget should clamp min to 8000');
+  cfgMgr.saveConfig({ history: { maxTokenBudget: 2000000 } });
+  assert.strictEqual(cfgMgr.getConfig().history.maxTokenBudget, 1000000, 'maxTokenBudget should clamp max to 1000000');
+  console.log('  ✓ Security mode & maxTokenBudget (64k default, 8k-1M clamping) correctly saved and persisted.');
 
   // Verify vendors in catalog
   const vendors = Object.keys(MODELS_CATALOG);
@@ -242,6 +251,16 @@ async function runTests() {
   console.log('  ✓ Tool output head-tail pruning (Feature 1) verified.');
 
   // Test 6b: Token Estimation & Budgeting (Feature 2)
+  const defaultHist = new HistoryManager();
+  assert.strictEqual(defaultHist.maxTokenBudget, 64000, 'Default maxTokenBudget in HistoryManager must be 64000');
+  defaultHist.setMaxTokenBudget(4000);
+  assert.strictEqual(defaultHist.maxTokenBudget, 8000, 'setMaxTokenBudget should clamp min to 8000');
+  defaultHist.setMaxTokenBudget(5000000);
+  assert.strictEqual(defaultHist.maxTokenBudget, 1000000, 'setMaxTokenBudget should clamp max to 1000000');
+  defaultHist.setMaxTokenBudget(128000);
+  assert.strictEqual(defaultHist.maxTokenBudget, 128000, 'setMaxTokenBudget should set 128000');
+  console.log('  ✓ HistoryManager maxTokenBudget defaults (64k) and bounds (8k-1M) verified.');
+
   const sampleText = "public class MyPlugin extends JavaPlugin { ... }";
   const est = estimateTokens(sampleText);
   assert.ok(est > 0 && est < sampleText.length, 'Token estimation must be reasonable');
@@ -431,6 +450,40 @@ async function runTests() {
   assert.ok(Array.isArray(mBatchProjects) && mBatchProjects.length === 2, 'Modrinth getProjects batch must return requested projects');
   assert.ok(mBatchProjects[0].title && mBatchProjects[1].title, 'Batch projects must have titles');
   console.log(`  ✓ Modrinth getProjects batch verified (${mBatchProjects.map(p => p.title).join(', ')}).`);
+
+  // 9b. Modrinth Artifact Fetch & Temp File Cleanup (/analyze workflow)
+  console.log('\nTesting Modrinth Artifact Fetch & Cleanup (/analyze workflow)...');
+  const fetchRes = await modrinth.fetchArtifactForAnalysis('https://modrinth.com/plugin/provanish');
+  assert.strictEqual(fetchRes.success, true, 'fetchArtifactForAnalysis must succeed');
+  assert.ok(fetchRes.path.includes('.craft'), 'Downloaded path must be in .craft/temp');
+  assert.ok(fs.existsSync(path.join(testDir, fetchRes.path)), 'Downloaded file must exist on disk');
+  assert.ok(fetchRes.size_bytes > 0, 'Downloaded file must have non-zero size');
+  console.log(`  ✓ Modrinth artifact fetched: ${fetchRes.filename} (${fetchRes.size_bytes} bytes at ${fetchRes.path}).`);
+
+  // Test deleteFile cleanup
+  const delRes = await fileMgr.deleteFile(fetchRes.path);
+  assert.strictEqual(delRes.success, true, 'deleteFile must succeed');
+  assert.strictEqual(fs.existsSync(path.join(testDir, fetchRes.path)), false, 'Deleted file must no longer exist on disk');
+  console.log(`  ✓ Temporary artifact cleaned up via deleteFile: ${delRes.path}.`);
+
+  // Test AIEngine tool dispatching for both tools
+  const engineWithModrinth = new AIEngine({
+    configManager: cfgMgr,
+    historyManager: hist,
+    fileManager: fileMgr,
+    terminalExecutor: term,
+    workspaceScanner: new WorkspaceScanner(testDir),
+    webIntelligence: new WebIntelligence(),
+    modrinthService: modrinth
+  });
+  engineWithModrinth.setWorkspaceRoot(testDir);
+
+  const testFileToDel = 'test-temp.txt';
+  await fileMgr.writeFile(testFileToDel, 'temporary data');
+  const toolDelRes = await engineWithModrinth.dispatchTool('delete_file', { path: testFileToDel });
+  assert.strictEqual(toolDelRes.success, true, 'AIEngine dispatchTool delete_file must succeed');
+  assert.strictEqual(fs.existsSync(path.join(testDir, testFileToDel)), false, 'test-temp.txt must be deleted');
+  console.log('  ✓ AIEngine dispatchTool delete_file verified.');
 
   // 10. Quota Tracker Calculations
   console.log('\nTesting xKiro Quota calculations...');

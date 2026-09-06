@@ -3,6 +3,7 @@ const { getSystemPrompt } = require('./system-prompt');
 const { ArchiveInspector } = require('./tools/archive-inspector');
 const { pruneToolContent } = require('./history-manager');
 const { WorkspaceMemory } = require('./workspace-memory');
+const { ModrinthService } = require('./tools/modrinth-service');
 
 const TOOLS_SCHEMA = [
   {
@@ -211,6 +212,44 @@ const TOOLS_SCHEMA = [
         }
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_modrinth_artifact",
+      description: "Download a Minecraft mod, plugin, or datapack .jar/.zip artifact directly from Modrinth using a Modrinth URL (e.g. 'https://modrinth.com/plugin/provanish' or 'https://modrinth.com/mod/sodium') or slug to a temporary directory (.craft/temp/) for inspection and auditing.",
+      parameters: {
+        type: "object",
+        properties: {
+          url_or_slug: {
+            type: "string",
+            description: "The Modrinth project URL (e.g. 'https://modrinth.com/plugin/provanish') or slug (e.g. 'provanish')"
+          },
+          version_number: {
+            type: "string",
+            description: "Optional specific version number to download. If omitted, downloads the latest release version."
+          }
+        },
+        required: ["url_or_slug"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_file",
+      description: "Delete a file or temporary artifact inside the workspace (e.g. cleaning up temporary downloaded .jar files in '.craft/temp/' after an audit).",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Relative path inside workspace (or external path) of the file to delete"
+          }
+        },
+        required: ["path"]
+      }
+    }
   }
 ];
 
@@ -230,6 +269,10 @@ function formatToolStatusDescription(name, args) {
       return `Editing file: ${args.path || '...'}`;
     case 'download_file':
       return `Downloading: ${args.path || args.url || '...'}`;
+    case 'fetch_modrinth_artifact':
+      return `Downloading Modrinth artifact: ${args.url_or_slug || '...'}`;
+    case 'delete_file':
+      return `Deleting file: ${args.path || '...'}`;
     case 'get_workspace_structure':
       return args.path ? `Scanning folder structure: ${args.path}...` : `Scanning workspace project files...`;
     case 'execute_terminal_command':
@@ -303,7 +346,7 @@ function isTransientError(err) {
 }
 
 class AIEngine {
-  constructor({ configManager, historyManager, fileManager, terminalExecutor, workspaceScanner, webIntelligence, archiveInspector = null }) {
+  constructor({ configManager, historyManager, fileManager, terminalExecutor, workspaceScanner, webIntelligence, archiveInspector = null, modrinthService = null }) {
     this.configManager = configManager;
     this.historyManager = historyManager;
     this.fileManager = fileManager;
@@ -311,6 +354,7 @@ class AIEngine {
     this.workspaceScanner = workspaceScanner;
     this.webIntelligence = webIntelligence;
     this.archiveInspector = archiveInspector || new ArchiveInspector();
+    this.modrinthService = modrinthService || new ModrinthService();
     this.workspaceMemory = new WorkspaceMemory(null);
     this.workspaceRoot = null;
     this.isAborted = false;
@@ -324,6 +368,9 @@ class AIEngine {
     this.workspaceScanner.setWorkspaceRoot(root);
     if (this.archiveInspector) {
       this.archiveInspector.setWorkspaceRoot(root);
+    }
+    if (this.modrinthService) {
+      this.modrinthService.setWorkspaceRoot(root);
     }
   }
 
@@ -892,6 +939,12 @@ class AIEngine {
 
       case 'download_file':
         return await this.fileManager.downloadFile(args.url, args.path);
+
+      case 'delete_file':
+        return await this.fileManager.deleteFile(args.path);
+
+      case 'fetch_modrinth_artifact':
+        return await this.modrinthService.fetchArtifactForAnalysis(args.url_or_slug, args.version_number);
 
       case 'update_workspace_memory':
         return this.workspaceMemory.update(args);

@@ -161,7 +161,8 @@ const DEFAULT_CONFIG = {
     maxReadSize: 512000 // 500KB
   },
   history: {
-    maxMessages: 35
+    maxMessages: 35,
+    maxTokenBudget: 64000
   },
   ignoredFolders: [
     "target",
@@ -219,7 +220,13 @@ class ConfigManager {
         security: { ...this.config.security, ...(newConfig.security || {}) },
         terminal: { ...this.config.terminal, ...(newConfig.terminal || {}) },
         fileManager: { ...this.config.fileManager, ...(newConfig.fileManager || {}) },
-        history: { ...this.config.history, ...(newConfig.history || {}) },
+        history: { 
+          ...this.config.history, 
+          ...(newConfig.history || {}),
+          maxTokenBudget: newConfig.history && newConfig.history.maxTokenBudget !== undefined
+            ? Math.max(8000, Math.min(1000000, parseInt(newConfig.history.maxTokenBudget, 10) || 64000))
+            : (this.config.history?.maxTokenBudget || 64000)
+        },
         ignoredFolders: Array.isArray(newConfig.ignoredFolders) 
           ? newConfig.ignoredFolders 
           : this.config.ignoredFolders

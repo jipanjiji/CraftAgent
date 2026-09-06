@@ -76,7 +76,7 @@ function pruneToolContent(content, maxChars = 5000, headLines = 30, tailLines = 
 }
 
 class HistoryManager {
-  constructor(maxMessages = 20, maxTokenBudget = 36000) {
+  constructor(maxMessages = 20, maxTokenBudget = 64000) {
     this.maxMessages = maxMessages;
     this.maxTokenBudget = maxTokenBudget;
     // Internal history of user/assistant/tool messages (excluding system prompt)
@@ -90,7 +90,9 @@ class HistoryManager {
   }
 
   setMaxTokenBudget(budget) {
-    this.maxTokenBudget = parseInt(budget, 10) || 36000;
+    let parsed = parseInt(budget, 10);
+    if (isNaN(parsed)) parsed = 64000;
+    this.maxTokenBudget = Math.max(8000, Math.min(1000000, parsed));
   }
 
   /**
@@ -212,7 +214,6 @@ class HistoryManager {
     // We traverse BACKWARDS from the latest message, accumulating tokens
     let accumulatedTokens = estimateTokens(systemPrompt);
     let sliceStart = 0;
-    const ceilingMessages = Math.max(this.maxMessages, 35); // Allow more messages if tokens permit
 
     let targetIndex = this.messages.length - 1;
     let includedCount = 0;

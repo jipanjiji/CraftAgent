@@ -40,7 +40,7 @@ function initServices() {
   terminalExecutor = new TerminalExecutor(null, cfg.terminal.defaultTimeout, cfg.terminal.shell);
   workspaceScanner = new WorkspaceScanner(null, cfg.ignoredFolders);
   webIntelligence = new WebIntelligence();
-  historyManager = new HistoryManager(cfg.history.maxMessages);
+  historyManager = new HistoryManager(cfg.history.maxMessages, cfg.history.maxTokenBudget || 64000);
   archiveInspector = new ArchiveInspector(null);
   modrinthService = new ModrinthService(null);
 
@@ -51,7 +51,8 @@ function initServices() {
     terminalExecutor,
     workspaceScanner,
     webIntelligence,
-    archiveInspector
+    archiveInspector,
+    modrinthService
   });
 
   // Unified Human-In-The-Loop Approval Callback for Terminal & External Paths
@@ -438,6 +439,9 @@ ipcMain.handle('settings:save', (_, newConfig) => {
     terminalExecutor.setShell(updated.terminal.shell);
     workspaceScanner.setIgnoredPatterns(updated.ignoredFolders);
     historyManager.setMaxMessages(updated.history.maxMessages);
+    if (updated.history && updated.history.maxTokenBudget) {
+      historyManager.setMaxTokenBudget(updated.history.maxTokenBudget);
+    }
 
     sendToRenderer('app:log', {
       type: 'SYSTEM',
@@ -455,6 +459,7 @@ ipcMain.handle('settings:reset', () => {
   terminalExecutor.setShell(resetConfig.terminal.shell);
   workspaceScanner.setIgnoredPatterns(resetConfig.ignoredFolders);
   historyManager.setMaxMessages(resetConfig.history.maxMessages);
+  historyManager.setMaxTokenBudget(resetConfig.history.maxTokenBudget || 64000);
 
   sendToRenderer('app:log', {
     type: 'SYSTEM',
@@ -477,7 +482,7 @@ ipcMain.handle('api:get-usage', async () => {
       const req = https.get('https://api.xkiro.com/v1/usage', {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'CraftAgent/1.0.5'
+          'User-Agent': 'CraftAgent/1.0.6'
         }
       }, (res) => {
         let body = '';

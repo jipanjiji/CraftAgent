@@ -14,7 +14,7 @@
 
 <br>
 
-[📥 **Download Portable Executable (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.5/Craft.Agent.1.0.5.exe) &nbsp;•&nbsp; [💾 **Download Windows Installer (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.5/Craft.Agent.Setup.1.0.5.exe) &nbsp;•&nbsp; [🚀 **Latest Release (v1.0.5)**](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.5)
+[📥 **Download Portable Executable (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.6/Craft.Agent.1.0.6.exe) &nbsp;•&nbsp; [💾 **Download Windows Installer (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.6/Craft.Agent.Setup.1.0.6.exe) &nbsp;•&nbsp; [🚀 **Latest Release (v1.0.6)**](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.6)
 
 </div>
 
@@ -30,12 +30,12 @@ Whether you need to scaffold a Paper 1.20+ teleportation plugin, build productio
 
 ## 🚀 Instant Download (Ready-to-Use)
 
-No Node.js or development environment needed! Simply download the standalone Windows build from the [v1.0.5 Release](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.5):
+No Node.js or development environment needed! Simply download the standalone Windows build from the [v1.0.6 Release](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.6):
 
 | Package Type | File Name | Description |
 | :--- | :--- | :--- |
-| **⭐ Portable Executable** | [**`Craft.Agent.1.0.5.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.5/Craft.Agent.1.0.5.exe) | **Zero installation required.** Double-click to run immediately anywhere (USB, Google Drive, Desktop). |
-| **Windows Installer** | [**`Craft.Agent.Setup.1.0.5.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.5/Craft.Agent.Setup.1.0.5.exe) | Complete setup wizard with Desktop shortcuts and Start Menu integration. |
+| **⭐ Portable Executable** | [**`Craft.Agent.1.0.6.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.6/Craft.Agent.1.0.6.exe) | **Zero installation required.** Double-click to run immediately anywhere (USB, Google Drive, Desktop). |
+| **Windows Installer** | [**`Craft.Agent.Setup.1.0.6.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.6/Craft.Agent.Setup.1.0.6.exe) | Complete setup wizard with Desktop shortcuts and Start Menu integration. |
 
 ---
 
@@ -79,13 +79,21 @@ No Node.js or development environment needed! Simply download the standalone Win
 - Strict 15-message token sliding window to preserve memory and context integrity across long sessions.
 - `.jar` artifacts in `build/libs/` are automatically kept visible for instant verification.
 
-### 📦 Modrinth Content Hub & Smart Downloader (v1.0.5)
+### 🛡️ Autonomous Bytecode & Security Auditing (`/analyze <url>`) (v1.0.6)
+- Autonomous end-to-end Modrinth artifact auditing: automatically fetches the `.jar` binary into `.craft/temp/`, decompiles and inspects manifests (`plugin.yml`, `paper-plugin.yml`, `fabric.mod.json`) and bytecode classes via `inspect_jar`, and cleans up temporary files with `delete_file`.
+- Delivers a 5-pillar security report (backdoor/malware detection, permission escalations, suspicious network endpoints, thread-safety/Folia compatibility, and TPS impact).
+
+### ⚙️ Customizable Max Context Window (8k - 1M Tokens) (v1.0.6)
+- Configurable context memory token budget directly in Settings with a numeric input clamped between 8,000 and 1,000,000 tokens (default upgraded to 64,000 tokens).
+- Accommodates massive modern context windows (DeepSeek V3, Qwen 2.5/3.5, Gemini 1.5/2.5 Pro) without sacrificing speed or budget control.
+
+### 📦 Modrinth Content Hub & Smart Downloader
 - Search and explore mods, plugins, datapacks, resource packs, shaders, and modpacks directly inside the app.
 - Filter by loaders (Paper, Spigot, Fabric, Forge, NeoForge, Quilt, etc.) and Minecraft versions.
 - Official release download modal with automated dependency resolution: single-click installation with dependencies directly into your workspace (`plugins/` or `mods/`).
 - One-click **AI Deep Audit**: Instantly audits any selected mod/plugin for security vulnerabilities, configuration options, server impact, and Folia/TPS performance.
 
-### 🔍 Interactive Visual Diff Preview (v1.0.5)
+### 🔍 Interactive Visual Diff Preview
 - Color-coded unified and split line-by-line diff engine.
 - Instant visual verification of file modifications (`patch_file` / `write_file`) before and after execution.
 

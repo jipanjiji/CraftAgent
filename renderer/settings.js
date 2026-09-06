@@ -13,6 +13,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cfgIgnoredFolders = document.getElementById('cfgIgnoredFolders');
   const cfgMaxMessages = document.getElementById('cfgMaxMessages');
   const historySizeLabel = document.getElementById('historySizeLabel');
+  const cfgMaxTokenBudget = document.getElementById('cfgMaxTokenBudget');
+  const tokenBudgetFormattedLabel = document.getElementById('tokenBudgetFormattedLabel');
+  const tokenBudgetKBadge = document.getElementById('tokenBudgetKBadge');
+  const tokenPresetsRow = document.getElementById('tokenPresetsRow');
   const btnSaveSettings = document.getElementById('btnSaveSettings');
   const btnResetSettings = document.getElementById('btnResetSettings');
 
@@ -56,7 +60,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     readSizeLabel.textContent = `${Math.round(cfgMaxReadSize.value / 1024)} KB`;
     cfgMaxMessages.value = cfg.history.maxMessages || 15;
     historySizeLabel.textContent = `${cfgMaxMessages.value} messages`;
+    const tokenBudget = (cfg.history && cfg.history.maxTokenBudget) ? cfg.history.maxTokenBudget : 64000;
+    updateTokenBudgetDisplay(tokenBudget);
     cfgIgnoredFolders.value = (cfg.ignoredFolders || []).join(', ');
+  }
+
+  function formatTokenBudget(val) {
+    const num = parseInt(val, 10) || 64000;
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(num % 1000000 === 0 ? 0 : 1)}M`;
+    }
+    return `${Math.round(num / 1000)}k`;
+  }
+
+  function updateTokenBudgetDisplay(val) {
+    let num = parseInt(val, 10);
+    if (isNaN(num)) num = 64000;
+    num = Math.max(8000, Math.min(1000000, num));
+    if (cfgMaxTokenBudget) cfgMaxTokenBudget.value = num;
+    const formattedK = formatTokenBudget(num);
+    if (tokenBudgetFormattedLabel) {
+      tokenBudgetFormattedLabel.textContent = `${formattedK} tokens (${num.toLocaleString()})`;
+    }
+    if (tokenBudgetKBadge) {
+      tokenBudgetKBadge.textContent = formattedK;
+    }
+    if (tokenPresetsRow) {
+      const btns = tokenPresetsRow.querySelectorAll('.btn-token-preset');
+      btns.forEach(btn => {
+        const btnVal = parseInt(btn.dataset.tokens, 10);
+        btn.classList.toggle('active', btnVal === num);
+      });
+    }
   }
 
   btnToggleApiKey.addEventListener('click', () => {
@@ -81,11 +116,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     historySizeLabel.textContent = `${cfgMaxMessages.value} messages`;
   });
 
+  if (cfgMaxTokenBudget) {
+    cfgMaxTokenBudget.addEventListener('input', () => {
+      updateTokenBudgetDisplay(cfgMaxTokenBudget.value);
+    });
+    cfgMaxTokenBudget.addEventListener('change', () => {
+      let val = parseInt(cfgMaxTokenBudget.value, 10);
+      if (isNaN(val)) val = 64000;
+      val = Math.max(8000, Math.min(1000000, val));
+      cfgMaxTokenBudget.value = val;
+      updateTokenBudgetDisplay(val);
+    });
+  }
+
+  if (tokenPresetsRow) {
+    tokenPresetsRow.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-token-preset');
+      if (!btn) return;
+      const tokens = parseInt(btn.dataset.tokens, 10);
+      if (tokens) {
+        updateTokenBudgetDisplay(tokens);
+      }
+    });
+  }
+
   btnSaveSettings.addEventListener('click', async () => {
     const ignoredArr = cfgIgnoredFolders.value
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
+
+    let tokenBudget = cfgMaxTokenBudget ? parseInt(cfgMaxTokenBudget.value, 10) : 64000;
+    if (isNaN(tokenBudget)) tokenBudget = 64000;
+    tokenBudget = Math.max(8000, Math.min(1000000, tokenBudget));
 
     const updated = {
       api: {
@@ -104,7 +167,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         maxReadSize: parseInt(cfgMaxReadSize.value, 10) || 512000
       },
       history: {
-        maxMessages: parseInt(cfgMaxMessages.value, 10) || 15
+        maxMessages: parseInt(cfgMaxMessages.value, 10) || 15,
+        maxTokenBudget: tokenBudget
       },
       ignoredFolders: ignoredArr
     };

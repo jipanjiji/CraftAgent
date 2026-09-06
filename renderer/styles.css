@@ -2161,6 +2161,7 @@ body {
 
 .form-field input[type="text"],
 .form-field input[type="password"],
+.form-field input[type="number"],
 .form-field textarea,
 .form-select {
   background: var(--bg-panel);
@@ -2214,6 +2215,64 @@ body {
 .btn-text-sm:hover {
   color: var(--text-primary);
   border-color: var(--border-medium);
+}
+
+.token-budget-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.token-budget-input-wrapper input[type="number"] {
+  flex: 1;
+}
+
+.token-budget-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+  min-width: 58px;
+}
+
+.token-presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.btn-token-preset {
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-token-preset:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-token-preset.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
 }
 
 .form-field input[type="range"] {
