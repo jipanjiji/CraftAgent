@@ -1,11 +1,8 @@
 # Dependencies
 node_modules/
 
-# Electron-builder unpacked binaries & metadata (we keep the final standalone .exe files)
-release/win-unpacked/
-release/*.blockmap
-release/builder-debug.yml
-release/latest*.yml
+# Electron-builder release outputs (large binaries are distributed via GitHub Releases)
+release/
 builder-effective-config.yaml
 .craft/
 __test_workspace__/
