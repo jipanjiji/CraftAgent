@@ -15,7 +15,10 @@ let mainWindow = null;
 let pendingConfirmations = new Map();
 
 const fs = require('fs');
+const https = require('https');
 const { ArchiveInspector } = require('./src/tools/archive-inspector');
+const { ModrinthService } = require('./src/tools/modrinth-service');
+const { DiffEngine } = require('./src/diff-engine');
 
 // Initialize Services
 let configManager;
@@ -25,6 +28,7 @@ let workspaceScanner;
 let webIntelligence;
 let historyManager;
 let archiveInspector;
+let modrinthService;
 let aiEngine;
 
 function initServices() {
@@ -38,6 +42,7 @@ function initServices() {
   webIntelligence = new WebIntelligence();
   historyManager = new HistoryManager(cfg.history.maxMessages);
   archiveInspector = new ArchiveInspector(null);
+  modrinthService = new ModrinthService(null);
 
   aiEngine = new AIEngine({
     configManager,
@@ -61,6 +66,19 @@ function initServices() {
           message: `Auto-approved (Full Access Mode): ${desc}`
         });
         return resolve(true);
+      }
+
+      if (currentCfg.security && currentCfg.security.mode === 'approve-for-me') {
+        const isUnsafe = (req.type === 'EXTERNAL_PATH') || req.isDangerous;
+        if (!isUnsafe) {
+          const desc = req.command || req.path || 'action';
+          sendToRenderer('app:log', {
+            type: 'SECURITY',
+            level: 'info',
+            message: `Auto-approved safe action (Approve For Me Mode): ${desc}`
+          });
+          return resolve(true);
+        }
       }
 
       if (!mainWindow || mainWindow.isDestroyed()) {
@@ -182,6 +200,7 @@ ipcMain.handle('workspace:select', async () => {
 
   const selectedPath = result.filePaths[0];
   aiEngine.setWorkspaceRoot(selectedPath);
+  if (modrinthService) modrinthService.setWorkspaceRoot(selectedPath);
 
   // Perform initial scan
   const scanResult = workspaceScanner.scan();
@@ -206,6 +225,7 @@ ipcMain.handle('workspace:set', async (_, targetPath) => {
   if (!fs.existsSync(targetPath)) return null;
 
   aiEngine.setWorkspaceRoot(targetPath);
+  if (modrinthService) modrinthService.setWorkspaceRoot(targetPath);
   const scanResult = workspaceScanner.scan();
 
   sendToRenderer('app:log', {
@@ -443,3 +463,99 @@ ipcMain.handle('settings:reset', () => {
   });
   return resetConfig;
 });
+
+// 7. API Quota & Usage Operations
+ipcMain.handle('api:get-usage', async () => {
+  try {
+    const cfg = configManager.getConfig();
+    const apiKey = cfg.api?.apiKey;
+    if (!apiKey) {
+      return { success: false, error: 'No xKiro API Key configured. Please add your key in Settings.' };
+    }
+
+    return new Promise((resolve) => {
+      const req = https.get('https://api.xkiro.com/v1/usage', {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'CraftAgent/1.0.5'
+        }
+      }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              const data = JSON.parse(body);
+              resolve({ success: true, usage: data });
+            } else {
+              resolve({ success: false, error: `HTTP ${res.statusCode}: ${body}` });
+            }
+          } catch (e) {
+            resolve({ success: false, error: e.message });
+          }
+        });
+      });
+
+      req.on('error', (err) => resolve({ success: false, error: err.message }));
+    });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// 8. Modrinth Hub & Discover Content Operations
+ipcMain.handle('modrinth:search', async (_, params) => {
+  try {
+    const res = await modrinthService.searchProjects(params);
+    return { success: true, ...res };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('modrinth:get-project', async (_, slugOrId) => {
+  try {
+    const project = await modrinthService.getProject(slugOrId);
+    return { success: true, project };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('modrinth:get-projects', async (_, ids) => {
+  try {
+    const projects = await modrinthService.getProjects(ids);
+    return { success: true, projects };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('modrinth:get-versions', async (_, { slugOrId, loaders, gameVersions }) => {
+  try {
+    const versions = await modrinthService.getProjectVersions(slugOrId, loaders, gameVersions);
+    return { success: true, versions };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('modrinth:download-file', async (_, params) => {
+  try {
+    const res = await modrinthService.downloadVersionFile(params);
+    sendToRenderer('app:log', {
+      type: 'MODRINTH',
+      level: 'success',
+      message: `Downloaded ${res.filename} (${(res.sizeBytes / 1024 / 1024).toFixed(2)} MB) to ${res.relativePath}`
+    });
+    return { success: true, ...res };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// 9. Visual Diff Operations
+ipcMain.handle('diff:generate', async (_, { oldText, newText, filePath }) => {
+  return DiffEngine.generateDiff(oldText, newText, filePath);
+});
+

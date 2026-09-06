@@ -15,6 +15,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnNewChat = document.getElementById('btnNewChat');
   const btnNewChatSidebar = document.getElementById('btnNewChatSidebar');
 
+  // Delete Session Modal Elements
+  const deleteSessionModal = document.getElementById('deleteSessionModal');
+  const deleteSessionTargetTitle = document.getElementById('deleteSessionTargetTitle');
+  const btnCloseDeleteSession = document.getElementById('btnCloseDeleteSession');
+  const btnCancelDeleteSession = document.getElementById('btnCancelDeleteSession');
+  const btnConfirmDeleteSession = document.getElementById('btnConfirmDeleteSession');
+  let pendingDeleteSessionId = null;
+
   // Split View & Console Toggle
   const mainSplitView = document.getElementById('mainSplitView');
   const splitDivider = document.getElementById('splitDivider');
@@ -32,6 +40,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fileUploadInput = document.getElementById('fileUploadInput');
   const attachmentPreviewBar = document.getElementById('attachmentPreviewBar');
   const inputWrapper = document.getElementById('inputWrapper');
+
+  function getFileIconSvg(filename) {
+    if (filename.endsWith('.jar') || filename.endsWith('.zip')) {
+      return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
+    }
+    return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>';
+  }
 
   // Console Elements
   const consoleLogs = document.getElementById('consoleLogs');
@@ -74,6 +89,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cfgIgnoredFolders = document.getElementById('cfgIgnoredFolders');
   const cfgMaxMessages = document.getElementById('cfgMaxMessages');
   const historySizeLabel = document.getElementById('historySizeLabel');
+
+  // Model Selector Pill & Floating Popup (Input Bar)
+  const btnSelectModelInput = document.getElementById('btnSelectModelInput');
+  const modelSelectPopup = document.getElementById('modelSelectPopup');
+  const modelPopupSearch = document.getElementById('modelPopupSearch');
+  const btnClearModelSearch = document.getElementById('btnClearModelSearch');
+  const modelPopupList = document.getElementById('modelPopupList');
+
+  // Security Mode Pill & Floating Popup (Input Bar - Photo 2)
+  const btnSecurityModeInput = document.getElementById('btnSecurityModeInput');
+  const securityPillIcon = document.getElementById('securityPillIcon');
+  const securityPillLabel = document.getElementById('securityPillLabel');
+  const securityModePopup = document.getElementById('securityModePopup');
+  const secOptionApproval = document.getElementById('secOptionApproval');
+  const secOptionApproveForMe = document.getElementById('secOptionApproveForMe');
+  const secOptionFullAccess = document.getElementById('secOptionFullAccess');
 
   // Lightbox Modal
   const imageLightboxModal = document.getElementById('imageLightboxModal');
@@ -128,6 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const savedSidebarCollapsed = localStorage.getItem('craft_sidebar_collapsed');
       if (savedSidebarCollapsed === 'true') {
         sessionsSidebar.classList.add('collapsed');
+        document.body.classList.add('sidebar-collapsed');
       }
 
       // Live Model Search listener
@@ -161,14 +193,301 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Load Sessions
       loadSessionsFromStorage();
+
+      // Setup Quota Tracker & Live Quota
+      fetchAndDisplayQuota();
+      setupQuotaTracker();
+
+      // Setup Discover Content (Modrinth Hub)
+      setupDiscoverContent();
+
+      // Setup Visual Diff Modal
+      setupDiffModal();
+
+      // Setup Input Bar Popups (Model Selector & Security Mode)
+      setupInputPopups();
     } catch (err) {
       console.error('Initialization error:', err);
     }
   }
 
+  // Model & Security popup icons & constants
+  const SECURITY_ICONS = {
+    approval: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6"></path><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path></svg>`,
+    'approve-for-me': `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>`,
+    'full-access': `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`
+  };
+
+  const SECURITY_LABELS = {
+    approval: 'Approval',
+    'approve-for-me': 'Smart',
+    'full-access': 'Full Access'
+  };
+
+  function updateSecurityModeUI(mode) {
+    const validMode = ['approval', 'approve-for-me', 'full-access'].includes(mode) ? mode : 'approval';
+    if (securityPillLabel) {
+      securityPillLabel.textContent = SECURITY_LABELS[validMode];
+      if (validMode === 'full-access') {
+        securityPillLabel.style.color = '#e07a5f';
+      } else {
+        securityPillLabel.style.color = '';
+      }
+    }
+
+    if (securityPillIcon) {
+      securityPillIcon.innerHTML = SECURITY_ICONS[validMode] || SECURITY_ICONS.approval;
+      if (validMode === 'full-access') {
+        securityPillIcon.style.color = '#e07a5f';
+      } else {
+        securityPillIcon.style.color = '';
+      }
+    }
+
+    [secOptionApproval, secOptionApproveForMe, secOptionFullAccess].forEach(opt => {
+      if (!opt) return;
+      if (opt.getAttribute('data-mode') === validMode) {
+        opt.classList.add('selected');
+      } else {
+        opt.classList.remove('selected');
+      }
+    });
+
+    if (cfgSecurityMode) {
+      cfgSecurityMode.value = validMode;
+    }
+  }
+
+  async function setSecurityMode(mode) {
+    if (!currentSettings) currentSettings = await window.craftAgent.getSettings();
+    if (!currentSettings.security) currentSettings.security = {};
+    currentSettings.security.mode = mode;
+
+    updateSecurityModeUI(mode);
+    await window.craftAgent.saveSettings(currentSettings);
+
+    if (securityModePopup) securityModePopup.style.display = 'none';
+    if (btnSecurityModeInput) btnSecurityModeInput.classList.remove('active');
+
+    addLogEntry({
+      type: 'SECURITY',
+      level: 'info',
+      time: new Date().toLocaleTimeString(),
+      message: `Security mode changed to: ${SECURITY_LABELS[mode] || mode}`
+    });
+  }
+
+  function renderModelPopupList(filterQuery = '') {
+    if (!modelPopupList || !cachedModelCatalog) return;
+    modelPopupList.innerHTML = '';
+    const q = (filterQuery || '').trim().toLowerCase();
+    const activeModelId = (currentSettings && currentSettings.api && currentSettings.api.model)
+      ? currentSettings.api.model
+      : 'openai/gpt-5.6-terra';
+    let totalMatches = 0;
+
+    for (const [vendor, models] of Object.entries(cachedModelCatalog)) {
+      const filtered = q
+        ? models.filter(m => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q) || vendor.toLowerCase().includes(q))
+        : models;
+
+      if (filtered.length > 0) {
+        totalMatches += filtered.length;
+        const vendorHeader = document.createElement('div');
+        vendorHeader.className = 'model-popup-vendor-group';
+        vendorHeader.textContent = vendor;
+        modelPopupList.appendChild(vendorHeader);
+
+        filtered.forEach(m => {
+          const item = document.createElement('div');
+          item.className = 'model-popup-item' + (m.id === activeModelId ? ' selected' : '');
+          item.setAttribute('data-model-id', m.id);
+
+          const info = document.createElement('div');
+          info.className = 'model-popup-item-info';
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'model-item-name';
+          nameSpan.textContent = m.name;
+
+          const idSpan = document.createElement('span');
+          idSpan.className = 'model-item-id';
+          idSpan.textContent = m.id;
+
+          info.appendChild(nameSpan);
+          info.appendChild(idSpan);
+          item.appendChild(info);
+
+          const checkSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          checkSvg.setAttribute('class', 'model-item-check');
+          checkSvg.setAttribute('width', '16');
+          checkSvg.setAttribute('height', '16');
+          checkSvg.setAttribute('viewBox', '0 0 24 24');
+          checkSvg.setAttribute('fill', 'none');
+          checkSvg.setAttribute('stroke', 'currentColor');
+          checkSvg.setAttribute('stroke-width', '2.5');
+          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', '20 6 9 17 4 12');
+          checkSvg.appendChild(polyline);
+          item.appendChild(checkSvg);
+
+          item.addEventListener('click', async () => {
+            await selectModel(m.id);
+          });
+
+          modelPopupList.appendChild(item);
+        });
+      }
+    }
+
+    if (totalMatches === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'model-popup-empty';
+      empty.textContent = q ? `No models matching "${q}"` : 'No models available';
+      modelPopupList.appendChild(empty);
+    }
+  }
+
+  async function selectModel(modelId) {
+    if (!currentSettings) currentSettings = await window.craftAgent.getSettings();
+    if (!currentSettings.api) currentSettings.api = {};
+    currentSettings.api.model = modelId;
+
+    const modelShort = modelId.split('/')[1] || modelId;
+    if (currentModelName) currentModelName.textContent = modelShort;
+
+    await window.craftAgent.saveSettings(currentSettings);
+
+    if (modelSelectPopup) modelSelectPopup.style.display = 'none';
+    if (btnSelectModelInput) btnSelectModelInput.classList.remove('active');
+
+    renderModelPopupList(modelPopupSearch ? modelPopupSearch.value : '');
+
+    addLogEntry({
+      type: 'SETTINGS',
+      level: 'info',
+      time: new Date().toLocaleTimeString(),
+      message: `Model switched to: ${modelId}`
+    });
+  }
+
+  function setupInputPopups() {
+    // Model Selector Pill Toggle
+    if (btnSelectModelInput && modelSelectPopup) {
+      btnSelectModelInput.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = modelSelectPopup.style.display !== 'none';
+        if (isOpen) {
+          modelSelectPopup.style.display = 'none';
+          btnSelectModelInput.classList.remove('active');
+        } else {
+          if (securityModePopup) {
+            securityModePopup.style.display = 'none';
+            if (btnSecurityModeInput) btnSecurityModeInput.classList.remove('active');
+          }
+          modelSelectPopup.style.display = 'flex';
+          btnSelectModelInput.classList.add('active');
+          renderModelPopupList(modelPopupSearch ? modelPopupSearch.value : '');
+          if (modelPopupSearch) {
+            setTimeout(() => modelPopupSearch.focus(), 50);
+          }
+        }
+      });
+    }
+
+    // Model Popup Search input
+    if (modelPopupSearch) {
+      modelPopupSearch.addEventListener('input', () => {
+        const val = modelPopupSearch.value;
+        if (btnClearModelSearch) {
+          btnClearModelSearch.style.display = val ? 'flex' : 'none';
+        }
+        renderModelPopupList(val);
+      });
+    }
+
+    if (btnClearModelSearch) {
+      btnClearModelSearch.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (modelPopupSearch) {
+          modelPopupSearch.value = '';
+          btnClearModelSearch.style.display = 'none';
+          renderModelPopupList('');
+          modelPopupSearch.focus();
+        }
+      });
+    }
+
+    // Security Mode Pill Toggle
+    if (btnSecurityModeInput && securityModePopup) {
+      btnSecurityModeInput.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = securityModePopup.style.display !== 'none';
+        if (isOpen) {
+          securityModePopup.style.display = 'none';
+          btnSecurityModeInput.classList.remove('active');
+        } else {
+          if (modelSelectPopup) {
+            modelSelectPopup.style.display = 'none';
+            if (btnSelectModelInput) btnSelectModelInput.classList.remove('active');
+          }
+          securityModePopup.style.display = 'block';
+          btnSecurityModeInput.classList.add('active');
+          const currentMode = currentSettings?.security?.mode || 'approval';
+          updateSecurityModeUI(currentMode);
+        }
+      });
+    }
+
+    // Options inside Security Mode Popup
+    [secOptionApproval, secOptionApproveForMe, secOptionFullAccess].forEach(opt => {
+      if (opt) {
+        opt.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const mode = opt.getAttribute('data-mode');
+          if (mode) {
+            await setSecurityMode(mode);
+          }
+        });
+      }
+    });
+
+    // Dismiss popups on click outside
+    document.addEventListener('click', (e) => {
+      if (modelSelectPopup && modelSelectPopup.style.display !== 'none') {
+        if (!modelSelectPopup.contains(e.target) && !btnSelectModelInput.contains(e.target)) {
+          modelSelectPopup.style.display = 'none';
+          if (btnSelectModelInput) btnSelectModelInput.classList.remove('active');
+        }
+      }
+      if (securityModePopup && securityModePopup.style.display !== 'none') {
+        if (!securityModePopup.contains(e.target) && !btnSecurityModeInput.contains(e.target)) {
+          securityModePopup.style.display = 'none';
+          if (btnSecurityModeInput) btnSecurityModeInput.classList.remove('active');
+        }
+      }
+    });
+
+    // Dismiss popups on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (modelSelectPopup && modelSelectPopup.style.display !== 'none') {
+          modelSelectPopup.style.display = 'none';
+          if (btnSelectModelInput) btnSelectModelInput.classList.remove('active');
+        }
+        if (securityModePopup && securityModePopup.style.display !== 'none') {
+          securityModePopup.style.display = 'none';
+          if (btnSecurityModeInput) btnSecurityModeInput.classList.remove('active');
+        }
+      }
+    });
+  }
+
   function populateModelDropdown(catalog, filterQuery = '') {
     if (catalog) cachedModelCatalog = catalog;
-    if (!cachedModelCatalog) return;
+    renderModelPopupList(filterQuery);
+
+    if (!cachedModelCatalog || !cfgModel) return;
 
     const currentSelected = cfgModel.value;
     cfgModel.innerHTML = '';
@@ -203,7 +522,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    // Preserve previously selected value if present in filtered list
     if (currentSelected) {
       const exists = Array.from(cfgModel.options).some(o => o.value === currentSelected);
       if (exists) {
@@ -216,14 +534,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!cfg) return;
     cfgBaseUrl.value = cfg.api.baseUrl || 'https://api.xkiro.com/v1';
     cfgApiKey.value = cfg.api.apiKey || '';
-    if (cfg.api.model) {
-      cfgModel.value = cfg.api.model;
+    if (cfg.api && cfg.api.model) {
+      if (cfgModel) cfgModel.value = cfg.api.model;
       const modelShort = cfg.api.model.split('/')[1] || cfg.api.model;
-      currentModelName.textContent = modelShort;
+      if (currentModelName) currentModelName.textContent = modelShort;
     }
+    const secMode = (cfg.security && cfg.security.mode) ? cfg.security.mode : 'approval';
     if (cfgSecurityMode) {
-      cfgSecurityMode.value = (cfg.security && cfg.security.mode) ? cfg.security.mode : 'approval';
+      cfgSecurityMode.value = secMode;
     }
+    updateSecurityModeUI(secMode);
+    renderModelPopupList(modelPopupSearch ? modelPopupSearch.value : '');
+
     cfgDefaultTimeout.value = cfg.terminal.defaultTimeout || 60;
     timeoutValLabel.textContent = `${cfgDefaultTimeout.value}s`;
     cfgShell.value = cfg.terminal.shell || 'powershell';
@@ -410,8 +732,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function deleteSession(sessionId, e) {
+  function requestDeleteSession(sessionId, e) {
     if (e) e.stopPropagation();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    pendingDeleteSessionId = sessionId;
+    if (deleteSessionTargetTitle) {
+      deleteSessionTargetTitle.textContent = session.title || 'Untitled Session';
+    }
+    if (deleteSessionModal) {
+      deleteSessionModal.style.display = 'flex';
+    }
+  }
+
+  function closeDeleteSessionModal() {
+    pendingDeleteSessionId = null;
+    if (deleteSessionModal) {
+      deleteSessionModal.style.display = 'none';
+    }
+  }
+
+  function confirmDeleteSession() {
+    if (!pendingDeleteSessionId) return;
+    const sessionId = pendingDeleteSessionId;
+    closeDeleteSessionModal();
 
     sessions = sessions.filter(s => s.id !== sessionId);
     saveSessionsToStorage();
@@ -428,6 +773,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderSessionsList();
   }
 
+  if (btnCloseDeleteSession) btnCloseDeleteSession.onclick = closeDeleteSessionModal;
+  if (btnCancelDeleteSession) btnCancelDeleteSession.onclick = closeDeleteSessionModal;
+  if (btnConfirmDeleteSession) btnConfirmDeleteSession.onclick = confirmDeleteSession;
+
   function renderSessionsList() {
     sessionsList.innerHTML = '';
     if (sessions.length === 0) {
@@ -436,25 +785,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     sessions.forEach(sess => {
+      const isAudit = sess.type === 'analysis';
       const item = document.createElement('div');
-      item.className = `session-item ${(!isDraftSession && sess.id === currentSessionId) ? 'active' : ''}`;
+      item.className = `session-item ${(!isDraftSession && sess.id === currentSessionId) ? 'active' : ''} ${isAudit ? 'session-audit' : ''}`;
+      const badge = isAudit ? '<span style="font-size: 9.5px; padding: 1px 5px; background: rgba(139,92,246,0.2); color: #c4b5fd; border-radius: 4px; font-weight: 700; margin-right: 4px;">AUDIT</span>' : '';
       item.innerHTML = `
-        <span class="session-item-title" title="${escapeHtml(sess.title)}">${escapeHtml(sess.title)}</span>
+        <span class="session-item-title" title="${escapeHtml(sess.title)}">${badge}${escapeHtml(sess.title)}</span>
         <button class="session-delete-btn" title="Delete Session">&times;</button>
       `;
 
-      item.onclick = () => switchSession(sess.id);
-      item.querySelector('.session-delete-btn').onclick = (e) => deleteSession(sess.id, e);
+      item.onclick = () => {
+        closeDiscoverView();
+        switchSession(sess.id);
+      };
+      item.querySelector('.session-delete-btn').onclick = (e) => requestDeleteSession(sess.id, e);
 
       sessionsList.appendChild(item);
     });
   }
 
-  btnNewChat.addEventListener('click', () => openNewChatDraft());
-  btnNewChatSidebar.addEventListener('click', () => openNewChatDraft());
+  if (btnNewChat) btnNewChat.addEventListener('click', () => openNewChatDraft());
+  if (btnNewChatSidebar) btnNewChatSidebar.addEventListener('click', () => openNewChatDraft());
 
   btnToggleSidebar.addEventListener('click', () => {
     sessionsSidebar.classList.toggle('collapsed');
+    document.body.classList.toggle('sidebar-collapsed', sessionsSidebar.classList.contains('collapsed'));
     localStorage.setItem('craft_sidebar_collapsed', sessionsSidebar.classList.contains('collapsed'));
   });
 
@@ -464,8 +819,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('craft_console_hidden', isHidden);
   }
 
-  btnToggleConsole.addEventListener('click', toggleConsoleVisibility);
-  btnCollapseConsole.addEventListener('click', toggleConsoleVisibility);
+  if (btnToggleConsole) btnToggleConsole.addEventListener('click', toggleConsoleVisibility);
+  if (btnCollapseConsole) btnCollapseConsole.addEventListener('click', toggleConsoleVisibility);
 
   // 4. Split Resizer Dragging
   let isDragging = false;
@@ -559,7 +914,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button class="attachment-chip-remove" title="Remove attachment">&times;</button>
         `;
       } else {
-        const icon = att.name.endsWith('.jar') ? '☕' : (att.name.endsWith('.zip') ? '📦' : '📄');
+        const icon = getFileIconSvg(att.name);
         chip.innerHTML = `
           <span class="attachment-chip-icon">${icon}</span>
           <div class="attachment-chip-info">
@@ -784,22 +1139,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     chatInput.style.height = Math.min(chatInput.scrollHeight, 140) + 'px';
   });
 
-  btnClearChat.addEventListener('click', async () => {
-    if (confirm('Clear messages in this chat session?')) {
-      await window.craftAgent.clearChat();
-      chatMessages.innerHTML = '';
-      if (welcomeScreen) {
-        welcomeScreen.style.display = 'block';
-        chatMessages.appendChild(welcomeScreen);
+  if (btnClearChat) {
+    btnClearChat.addEventListener('click', async () => {
+      if (confirm('Clear messages in this chat session?')) {
+        await window.craftAgent.clearChat();
+        chatMessages.innerHTML = '';
+        if (welcomeScreen) {
+          welcomeScreen.style.display = 'block';
+          chatMessages.appendChild(welcomeScreen);
+        }
+        const curr = sessions.find(s => s.id === currentSessionId);
+        if (curr) {
+          curr.html = '';
+          curr.messages = [];
+          saveSessionsToStorage();
+        }
       }
-      const curr = sessions.find(s => s.id === currentSessionId);
-      if (curr) {
-        curr.html = '';
-        curr.messages = [];
-        saveSessionsToStorage();
-      }
-    }
-  });
+    });
+  }
 
   // 8. UI Rendering Helpers
   function appendUserMessage(text, attachments = []) {
@@ -822,7 +1179,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (files.length > 0) {
         fileHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">` +
           files.map(f => {
-            const icon = f.name.endsWith('.jar') ? '☕' : (f.name.endsWith('.zip') ? '📦' : '📄');
+            const icon = getFileIconSvg(f.name);
             return `<div class="message-file-badge">
               <span class="file-badge-icon">${icon}</span>
               <span>${escapeHtml(f.name)}</span>
@@ -889,8 +1246,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       <div class="message-meta">
         <span style="color: var(--danger); font-weight: 600;">Error</span>
       </div>
-      <div class="message-bubble" style="color: var(--danger); font-weight: 500;">
-        ⚠️ ${escapeHtml(errorMsg)}
+      <div class="message-bubble" style="color: var(--danger); font-weight: 500; display: flex; align-items: center; gap: 6px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span>${escapeHtml(errorMsg)}</span>
       </div>
     `;
     chatMessages.appendChild(errDiv);
@@ -1188,14 +1546,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Update body with result
       const body = stepItem.querySelector('.agent-step-body');
       if (body && data.result) {
-        let text = '';
-        if (data.result.content) text = data.result.content;
-        else if (data.result.tree) text = data.result.tree;
-        else if (data.result.stdout || data.result.stderr) text = (data.result.stdout || '') + '\n' + (data.result.stderr || '');
-        else if (data.result.results) text = JSON.stringify(data.result.results, null, 2);
-        else text = JSON.stringify(data.result, null, 2);
+        if (data.result.diffData && data.result.diffData.lines && data.result.diffData.lines.length > 0) {
+          body.innerHTML = '';
+          const inlineDiff = createInlineDiffElement(data.result.diffData);
+          body.appendChild(inlineDiff);
+        } else {
+          let text = '';
+          if (data.result.content) text = data.result.content;
+          else if (data.result.tree) text = data.result.tree;
+          else if (data.result.stdout || data.result.stderr) text = (data.result.stdout || '') + '\n' + (data.result.stderr || '');
+          else if (data.result.results) text = JSON.stringify(data.result.results, null, 2);
+          else text = JSON.stringify(data.result, null, 2);
 
-        body.textContent = text;
+          body.textContent = text;
+        }
       }
     }
   });
@@ -1222,6 +1586,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       wasStoppedByUser = true;
     }
     await finishGeneration();
+    fetchAndDisplayQuota();
   });
 
   // 11. Human-In-The-Loop Approval (Terminal & External Path)
@@ -1232,7 +1597,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (confirmDangerBanner) confirmDangerBanner.style.display = 'none';
       if (confirmModalTitle) confirmModalTitle.textContent = 'External Path Access Approval';
       if (confirmModalDesc) confirmModalDesc.textContent = `Craft Agent requests permission to ${req.action.replace('_', ' ')} on a file or folder outside your active workspace:`;
-      if (confirmModalSubtext) confirmModalSubtext.innerHTML = '⚠️ <strong>Visual Safety Aid:</strong> This file/folder is outside your active workspace. Only approve if you explicitly asked Craft Agent to access it.';
+      if (confirmModalSubtext) confirmModalSubtext.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px; color: var(--warning);"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><strong>Visual Safety Aid:</strong> This file/folder is outside your active workspace. Only approve if you explicitly asked Craft Agent to access it.';
       confirmCommandText.textContent = req.path;
       confirmCwd.textContent = req.action.toUpperCase();
       confirmTimeout.textContent = req.description || 'External Path Access';
@@ -1248,12 +1613,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         }
         if (confirmModalSubtext) {
-          confirmModalSubtext.innerHTML = '⚠️ <strong>Visual Safety Aid:</strong> Destructive pattern detected. <em>Note: Regex pattern matching cannot detect every disguised script or alias.</em> Always review the command thoroughly before approving — execution runs with your local user permissions.';
+          confirmModalSubtext.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px; color: var(--danger);"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><strong>Visual Safety Aid:</strong> Destructive pattern detected. <em>Note: Regex pattern matching cannot detect every disguised script or alias.</em> Always review the command thoroughly before approving — execution runs with your local user permissions.';
         }
       } else {
         if (confirmDangerBanner) confirmDangerBanner.style.display = 'none';
         if (confirmModalSubtext) {
-          confirmModalSubtext.innerHTML = '⚠️ <strong>Visual Safety Aid:</strong> Only approve commands you recognize. Always review commands before approving — execution runs with your local user permissions.';
+          confirmModalSubtext.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px; color: var(--warning);"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><strong>Visual Safety Aid:</strong> Only approve commands you recognize. Always review commands before approving — execution runs with your local user permissions.';
         }
       }
 
@@ -1431,10 +1796,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       api: {
         baseUrl: cfgBaseUrl.value.trim() || 'https://api.xkiro.com/v1',
         apiKey: cfgApiKey.value.trim(),
-        model: cfgModel.value
+        model: (cfgModel && cfgModel.value)
+          ? cfgModel.value
+          : ((currentSettings && currentSettings.api && currentSettings.api.model) ? currentSettings.api.model : 'openai/gpt-5.6-terra')
       },
       security: {
-        mode: cfgSecurityMode ? cfgSecurityMode.value : 'approval'
+        mode: cfgSecurityMode ? cfgSecurityMode.value : ((currentSettings && currentSettings.security && currentSettings.security.mode) ? currentSettings.security.mode : 'approval')
       },
       terminal: {
         defaultTimeout: parseInt(cfgDefaultTimeout.value, 10) || 60,
@@ -1500,7 +1867,1190 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Markdown Formatter (Robust, tight lists, clean paragraph spacing)
+  // ==========================================================================
+  // Visual Diff Preview Handlers
+  // ==========================================================================
+  let currentActiveDiffData = null;
+  let currentDiffViewMode = 'unified'; // 'unified' or 'split'
+
+  function createInlineDiffElement(diffData) {
+    const container = document.createElement('div');
+    container.className = 'step-inline-diff-container';
+
+    const header = document.createElement('div');
+    header.className = 'step-inline-diff-header';
+    header.innerHTML = `
+      <span>Diff: <span class="diff-stat-plus">+${diffData.stats.additions}</span> <span class="diff-stat-minus">-${diffData.stats.deletions}</span></span>
+      <button class="btn-open-full-diff" type="button"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>Fullscreen Diff</button>
+    `;
+
+    header.querySelector('.btn-open-full-diff').onclick = (e) => {
+      e.stopPropagation();
+      openFullDiffModal(diffData);
+    };
+
+    const table = document.createElement('table');
+    table.className = 'diff-table';
+    const tbody = document.createElement('tbody');
+
+    const displayLines = (diffData.lines || []).slice(0, 35);
+    displayLines.forEach(l => {
+      const tr = document.createElement('tr');
+      tr.className = `diff-${l.type}`;
+      const marker = l.type === 'addition' ? '+' : (l.type === 'deletion' ? '-' : ' ');
+      tr.innerHTML = `
+        <td class="diff-gutter-old">${l.oldLineNo || ''}</td>
+        <td class="diff-gutter-new">${l.newLineNo || ''}</td>
+        <td class="diff-marker">${marker}</td>
+        <td class="diff-code">${escapeHtml(l.content)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    if (diffData.lines && diffData.lines.length > 35) {
+      const trMore = document.createElement('tr');
+      trMore.innerHTML = `
+        <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 8px; font-style: italic; background: rgba(0,0,0,0.3);">
+          ... and ${diffData.lines.length - 35} more lines (Click 'Fullscreen Diff' to inspect complete file changes)
+        </td>
+      `;
+      tbody.appendChild(trMore);
+    }
+
+    table.appendChild(tbody);
+    container.appendChild(header);
+    container.appendChild(table);
+    return container;
+  }
+
+  function openFullDiffModal(diffData) {
+    currentActiveDiffData = diffData;
+    const diffModal = document.getElementById('diffModal');
+    const diffModalFilePath = document.getElementById('diffModalFilePath');
+    const diffModalStats = document.getElementById('diffModalStats');
+
+    if (diffModalFilePath) diffModalFilePath.textContent = diffData.filePath || 'File Diff';
+    if (diffModalStats && diffData.stats) {
+      diffModalStats.innerHTML = `
+        <span class="diff-stat-plus">+${diffData.stats.additions} lines</span>
+        <span class="diff-stat-minus">-${diffData.stats.deletions} lines</span>
+      `;
+    }
+
+    renderFullDiffTable();
+    if (diffModal) diffModal.style.display = 'flex';
+  }
+
+  function renderFullDiffTable() {
+    if (!currentActiveDiffData) return;
+    const wrapper = document.getElementById('diffViewerWrapper');
+    if (!wrapper) return;
+    wrapper.innerHTML = '';
+
+    const table = document.createElement('table');
+    table.className = 'diff-table';
+    const tbody = document.createElement('tbody');
+
+    if (currentDiffViewMode === 'split') {
+      currentActiveDiffData.lines.forEach(l => {
+        const tr = document.createElement('tr');
+        if (l.type === 'addition') {
+          tr.innerHTML = `
+            <td class="diff-gutter-old" style="width: 40px;"></td>
+            <td style="width: 50%; background: rgba(0,0,0,0.2); border-right: 1px solid rgba(255,255,255,0.08);"></td>
+            <td class="diff-gutter-new" style="width: 40px;">${l.newLineNo || ''}</td>
+            <td class="diff-code diff-addition" style="width: 50%;"><span class="diff-marker">+</span> ${escapeHtml(l.content)}</td>
+          `;
+        } else if (l.type === 'deletion') {
+          tr.innerHTML = `
+            <td class="diff-gutter-old" style="width: 40px;">${l.oldLineNo || ''}</td>
+            <td class="diff-code diff-deletion" style="width: 50%; border-right: 1px solid rgba(255,255,255,0.08);"><span class="diff-marker">-</span> ${escapeHtml(l.content)}</td>
+            <td class="diff-gutter-new" style="width: 40px;"></td>
+            <td style="width: 50%; background: rgba(0,0,0,0.2);"></td>
+          `;
+        } else {
+          tr.innerHTML = `
+            <td class="diff-gutter-old" style="width: 40px;">${l.oldLineNo || ''}</td>
+            <td class="diff-code diff-context" style="width: 50%; border-right: 1px solid rgba(255,255,255,0.08);">${escapeHtml(l.content)}</td>
+            <td class="diff-gutter-new" style="width: 40px;">${l.newLineNo || ''}</td>
+            <td class="diff-code diff-context" style="width: 50%;">${escapeHtml(l.content)}</td>
+          `;
+        }
+        tbody.appendChild(tr);
+      });
+    } else {
+      currentActiveDiffData.lines.forEach(l => {
+        const tr = document.createElement('tr');
+        tr.className = `diff-${l.type}`;
+        const marker = l.type === 'addition' ? '+' : (l.type === 'deletion' ? '-' : ' ');
+        tr.innerHTML = `
+          <td class="diff-gutter-old">${l.oldLineNo || ''}</td>
+          <td class="diff-gutter-new">${l.newLineNo || ''}</td>
+          <td class="diff-marker">${marker}</td>
+          <td class="diff-code">${escapeHtml(l.content)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+  }
+
+  function setupDiffModal() {
+    const diffModal = document.getElementById('diffModal');
+    const btnCloseDiff = document.getElementById('btnCloseDiff');
+    const btnCloseDiffBottom = document.getElementById('btnCloseDiffBottom');
+    const btnDiffUnified = document.getElementById('btnDiffUnified');
+    const btnDiffSplit = document.getElementById('btnDiffSplit');
+    const btnCopyDiffContent = document.getElementById('btnCopyDiffContent');
+
+    const closeDiff = () => {
+      if (diffModal) diffModal.style.display = 'none';
+      currentActiveDiffData = null;
+    };
+
+    if (btnCloseDiff) btnCloseDiff.onclick = closeDiff;
+    if (btnCloseDiffBottom) btnCloseDiffBottom.onclick = closeDiff;
+
+    if (btnDiffUnified) {
+      btnDiffUnified.onclick = () => {
+        currentDiffViewMode = 'unified';
+        btnDiffUnified.classList.add('active');
+        if (btnDiffSplit) btnDiffSplit.classList.remove('active');
+        renderFullDiffTable();
+      };
+    }
+
+    if (btnDiffSplit) {
+      btnDiffSplit.onclick = () => {
+        currentDiffViewMode = 'split';
+        btnDiffSplit.classList.add('active');
+        if (btnDiffUnified) btnDiffUnified.classList.remove('active');
+        renderFullDiffTable();
+      };
+    }
+
+    if (btnCopyDiffContent) {
+      btnCopyDiffContent.onclick = () => {
+        if (!currentActiveDiffData || !currentActiveDiffData.lines) return;
+        const raw = currentActiveDiffData.lines.map(l => {
+          const marker = l.type === 'addition' ? '+' : (l.type === 'deletion' ? '-' : ' ');
+          return `${marker} ${l.content}`;
+        }).join('\n');
+        navigator.clipboard.writeText(raw);
+        btnCopyDiffContent.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Copied!</span>';
+        setTimeout(() => {
+          btnCopyDiffContent.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> <span>Copy Diff</span>';
+        }, 1500);
+      };
+    }
+  }
+
+  // ==========================================================================
+  // xKiro Quota & Balance Tracker Handlers
+  // ==========================================================================
+  async function fetchAndDisplayQuota() {
+    try {
+      const res = await window.craftAgent.getApiUsage();
+      const badgeText = document.getElementById('xkiroQuotaText');
+      const sidebarPctEl = document.getElementById('sidebarQuotaPct');
+      const sidebarFillEl = document.getElementById('sidebarQuotaProgressFill');
+      const quotaCard = document.getElementById('xkiroQuotaBadge');
+
+      if (!res || !res.success || !res.usage) {
+        if (badgeText) badgeText.textContent = 'Check Limit';
+        if (sidebarPctEl) sidebarPctEl.textContent = '--';
+        if (sidebarFillEl) sidebarFillEl.style.width = '0%';
+        return;
+      }
+
+      const u = res.usage;
+      const freeTokens = u.free_tokens || {};
+      const wallet = u.wallet || {};
+
+      const remaining = freeTokens.remaining || 0;
+      const limit = freeTokens.limit_per_day || 5000000;
+      const used = freeTokens.used_today || 0;
+      const remainingM = (remaining / 1000000).toFixed(2);
+      const limitM = (limit / 1000000).toFixed(1);
+      const pct = Math.max(0, Math.min(100, Math.round((remaining / limit) * 100)));
+
+      if (badgeText) {
+        badgeText.textContent = `${remainingM}M / ${limitM}M Free`;
+      }
+      if (quotaCard) {
+        quotaCard.title = `xKiro Free Tokens: ${remaining.toLocaleString()} remaining / ${limit.toLocaleString()} limit (Click to view details)`;
+      }
+      if (sidebarPctEl) {
+        sidebarPctEl.textContent = `${pct}%`;
+        if (pct <= 15) {
+          sidebarPctEl.style.color = '#ef4444';
+          sidebarPctEl.style.background = 'rgba(239, 68, 68, 0.12)';
+        } else if (pct <= 35) {
+          sidebarPctEl.style.color = '#f59e0b';
+          sidebarPctEl.style.background = 'rgba(245, 158, 11, 0.12)';
+        } else {
+          sidebarPctEl.style.color = '#10b981';
+          sidebarPctEl.style.background = 'rgba(16, 185, 129, 0.12)';
+        }
+      }
+      if (sidebarFillEl) {
+        sidebarFillEl.style.width = `${pct}%`;
+        if (pct <= 15) {
+          sidebarFillEl.style.background = 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)';
+        } else if (pct <= 35) {
+          sidebarFillEl.style.background = 'linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%)';
+        } else {
+          sidebarFillEl.style.background = 'linear-gradient(90deg, #10b981 0%, #34d399 100%)';
+        }
+      }
+      const pctEl = document.getElementById('quotaTokensPercentage');
+      const fillEl = document.getElementById('quotaProgressFill');
+      const usedEl = document.getElementById('quotaTokensUsed');
+      const limitEl = document.getElementById('quotaTokensLimit');
+      const remEl = document.getElementById('quotaTokensRemaining');
+      const balEl = document.getElementById('quotaWalletBalance');
+      const heldEl = document.getElementById('quotaWalletHeld');
+      const planEl = document.getElementById('quotaAccountPlan');
+
+      if (pctEl) pctEl.textContent = `${pct}% Remaining`;
+      if (fillEl) fillEl.style.width = `${pct}%`;
+      if (usedEl) usedEl.textContent = used.toLocaleString();
+      if (limitEl) limitEl.textContent = limit.toLocaleString();
+      if (remEl) remEl.textContent = remaining.toLocaleString();
+      if (balEl) balEl.textContent = `$${parseFloat(wallet.balance_usd || 0).toFixed(2)} USD`;
+      if (heldEl) heldEl.textContent = `$${parseFloat(wallet.held_usd || 0).toFixed(2)} USD`;
+      if (planEl) planEl.textContent = u.plan ? String(u.plan).toUpperCase() : 'Free Tier';
+    } catch (err) {
+      console.warn('Failed to fetch xKiro quota:', err);
+    }
+  }
+
+  function setupQuotaTracker() {
+    const xkiroQuotaBadge = document.getElementById('xkiroQuotaBadge');
+    const quotaModal = document.getElementById('quotaModal');
+    const btnCloseQuota = document.getElementById('btnCloseQuota');
+    const btnCloseQuotaBottom = document.getElementById('btnCloseQuotaBottom');
+    const btnRefreshQuota = document.getElementById('btnRefreshQuota');
+
+    if (xkiroQuotaBadge) {
+      xkiroQuotaBadge.onclick = () => {
+        fetchAndDisplayQuota();
+        if (quotaModal) quotaModal.style.display = 'flex';
+      };
+    }
+
+    const closeQuota = () => {
+      if (quotaModal) quotaModal.style.display = 'none';
+    };
+
+    if (btnCloseQuota) btnCloseQuota.onclick = closeQuota;
+    if (btnCloseQuotaBottom) btnCloseQuotaBottom.onclick = closeQuota;
+
+    if (btnRefreshQuota) {
+      btnRefreshQuota.onclick = async () => {
+        btnRefreshQuota.disabled = true;
+        btnRefreshQuota.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> <span>Refreshing...</span>';
+        await fetchAndDisplayQuota();
+        btnRefreshQuota.disabled = false;
+        btnRefreshQuota.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> <span>Refresh Live Quota</span>';
+      };
+    }
+  }
+
+  // ==========================================================================
+  // Discover Content (Modrinth Hub) Handlers
+  // ==========================================================================
+  let currentDiscoverType = 'plugin';
+  let discoverSearchTimer = null;
+  let discoverOffset = 0;
+  const discoverLimit = 24;
+  let isDiscoverLoading = false;
+  let allLoadedHits = [];
+  let currentDetailProject = null;
+  const knownVersionsSet = new Set(['1.21.1', '1.21', '1.20.6', '1.20.4', '1.20.2', '1.20.1', '1.19.4', '1.18.2', '1.16.5']);
+  const knownLoadersSet = new Set(['paper', 'spigot', 'purpur', 'bukkit', 'fabric', 'forge', 'neoforge', 'quilt']);
+
+  function openDiscoverView() {
+    const chatPanel = document.getElementById('chatPanel');
+    const discoverPanel = document.getElementById('discoverPanel');
+    const splitDivider = document.getElementById('splitDivider');
+    const consolePanel = document.getElementById('consolePanel');
+    if (chatPanel && discoverPanel) {
+      chatPanel.style.display = 'none';
+      if (splitDivider) splitDivider.style.display = 'none';
+      if (consolePanel) consolePanel.style.display = 'none';
+      discoverPanel.style.display = 'flex';
+      if (allLoadedHits.length === 0) {
+        fetchModrinthProjects(true);
+      }
+    }
+  }
+
+  function closeDiscoverView() {
+    const chatPanel = document.getElementById('chatPanel');
+    const discoverPanel = document.getElementById('discoverPanel');
+    if (chatPanel && discoverPanel) {
+      discoverPanel.style.display = 'none';
+      chatPanel.style.display = 'flex';
+    }
+  }
+
+  async function fetchModrinthProjects(reset = false) {
+    if (isDiscoverLoading) return;
+    isDiscoverLoading = true;
+
+    if (reset) {
+      discoverOffset = 0;
+      allLoadedHits = [];
+      const grid = document.getElementById('modrinthGrid');
+      if (grid) grid.innerHTML = '';
+    }
+
+    const discoverLoading = document.getElementById('discoverLoading');
+    const discoverLoadMoreWrap = document.getElementById('discoverLoadMoreWrap');
+    const discoverResultCount = document.getElementById('discoverResultCount');
+    const searchInput = document.getElementById('modrinthSearchInput');
+    const versionSelect = document.getElementById('modrinthVersionSelect');
+    const platformSelect = document.getElementById('modrinthPlatformSelect');
+    const sortSelect = document.getElementById('modrinthSortSelect');
+
+    if (discoverLoading) discoverLoading.style.display = 'flex';
+    if (discoverLoadMoreWrap) discoverLoadMoreWrap.style.display = 'none';
+
+    try {
+      const query = searchInput ? searchInput.value.trim() : '';
+      const gameVersion = versionSelect ? versionSelect.value : 'all';
+      const loader = platformSelect ? platformSelect.value : 'all';
+      const sortBy = sortSelect ? sortSelect.value : 'downloads';
+
+      const res = await window.craftAgent.modrinth.search({
+        query,
+        projectType: currentDiscoverType,
+        loader,
+        gameVersion,
+        sortBy,
+        limit: discoverLimit,
+        offset: discoverOffset
+      });
+
+      if (res && res.success) {
+        const hits = res.hits || [];
+        allLoadedHits = allLoadedHits.concat(hits);
+
+        // Populate dynamic filters from Modrinth API response
+        hits.forEach(h => {
+          if (Array.isArray(h.versions)) {
+            h.versions.forEach(v => {
+              if (typeof v === 'string' && /^\d+(\.\d+)*$/.test(v.trim())) knownVersionsSet.add(v.trim());
+            });
+          }
+          if (Array.isArray(h.categories)) {
+            h.categories.forEach(c => {
+              if (typeof c === 'string') knownLoadersSet.add(c.toLowerCase());
+            });
+          }
+        });
+        updateFilterDropdowns();
+
+        renderModrinthGrid(hits, !reset);
+
+        if (discoverResultCount) {
+          const typeLabel = currentDiscoverType.charAt(0).toUpperCase() + currentDiscoverType.slice(1) + 's';
+          discoverResultCount.textContent = `Found ${res.totalHits.toLocaleString()} ${typeLabel} on Modrinth (Showing ${allLoadedHits.length})`;
+        }
+
+        if (discoverLoadMoreWrap) {
+          discoverLoadMoreWrap.style.display = (allLoadedHits.length < res.totalHits) ? 'flex' : 'none';
+        }
+
+        discoverOffset += hits.length;
+      }
+    } catch (err) {
+      console.error('Failed to fetch from Modrinth:', err);
+      if (discoverResultCount) discoverResultCount.textContent = 'Error loading results. Check internet connection.';
+    } finally {
+      isDiscoverLoading = false;
+      if (discoverLoading) discoverLoading.style.display = 'none';
+    }
+  }
+
+  function updateFilterDropdowns() {
+    const versionSelect = document.getElementById('modrinthVersionSelect');
+    const platformSelect = document.getElementById('modrinthPlatformSelect');
+
+    if (versionSelect) {
+      const current = versionSelect.value;
+      const sortedVersions = Array.from(knownVersionsSet)
+        .filter(v => /^\d+(\.\d+)*$/.test(v.trim()))
+        .sort(compareMinecraftVersions);
+      let vHtml = '<option value="all">All Versions</option>';
+      sortedVersions.slice(0, 30).forEach(v => {
+        vHtml += `<option value="${v}" ${current === v ? 'selected' : ''}>${v}</option>`;
+      });
+      versionSelect.innerHTML = vHtml;
+    }
+
+    if (platformSelect) {
+      const current = platformSelect.value;
+      const sortedLoaders = Array.from(knownLoadersSet).sort();
+      let lHtml = '<option value="all">All Platforms</option>';
+      sortedLoaders.forEach(l => {
+        const display = l.charAt(0).toUpperCase() + l.slice(1);
+        lHtml += `<option value="${l}" ${current === l ? 'selected' : ''}>${display}</option>`;
+      });
+      platformSelect.innerHTML = lHtml;
+    }
+  }
+
+  function formatMetricNumber(num) {
+    if (!num) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
+    return String(num);
+  }
+
+  function renderModrinthGrid(hits, append = false) {
+    const grid = document.getElementById('modrinthGrid');
+    if (!grid) return;
+    if (!append) grid.innerHTML = '';
+
+    if (hits.length === 0 && !append) {
+      grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">No projects found matching your search. Try adjusting filters or search term.</div>';
+      return;
+    }
+
+    hits.forEach(h => {
+      const card = document.createElement('div');
+      card.className = 'modrinth-card';
+      const iconUrl = h.icon_url || 'assets/logo.png';
+      const downloadsFormatted = formatMetricNumber(h.downloads);
+      const followsFormatted = formatMetricNumber(h.follows);
+
+      const loadersBadges = (h.categories || []).slice(0, 3).map(c => `<span class="meta-pill pill-loader">${escapeHtml(c)}</span>`).join('');
+
+      card.innerHTML = `
+        <div>
+          <div class="card-top">
+            <img class="card-icon" src="${escapeHtml(iconUrl)}" onerror="this.src='assets/logo.png'" alt="icon" />
+            <div class="card-title-area">
+              <div class="card-title" title="${escapeHtml(h.title)}">${escapeHtml(h.title)}</div>
+              <div class="card-author">by <strong>${escapeHtml(h.author)}</strong></div>
+            </div>
+          </div>
+          <div class="card-desc" title="${escapeHtml(h.description)}">${escapeHtml(h.description)}</div>
+          <div class="card-meta-row">
+            <span class="meta-pill pill-downloads"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> <span>${downloadsFormatted} dl</span></span>
+            <span class="meta-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> <span>${followsFormatted}</span></span>
+            ${loadersBadges}
+          </div>
+        </div>
+        <div class="card-actions-row">
+          <button class="btn-card-action btn-card-download" type="button" title="View versions & download file">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>View & Download</span>
+          </button>
+          <button class="btn-card-action btn-card-analyze" type="button" title="Analyze safety & features with Craft Agent AI in a dedicated chat">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            <span>Analyze with AI</span>
+          </button>
+        </div>
+      `;
+
+      card.querySelector('.card-title').onclick = () => openModrinthDetailModal(h);
+      card.querySelector('.btn-card-download').onclick = () => openModrinthDetailModal(h);
+      card.querySelector('.btn-card-analyze').onclick = (e) => {
+        e.stopPropagation();
+        triggerAiAnalysis(h);
+      };
+
+      grid.appendChild(card);
+    });
+  }
+
+  let currentProjectVersions = [];
+  let dependencyProjectsCache = {};
+
+  function formatLoaderName(loader) {
+    if (!loader) return 'All';
+    const map = {
+      'fabric': 'Fabric',
+      'forge': 'Forge',
+      'neoforge': 'NeoForge',
+      'paper': 'Paper',
+      'purpur': 'Purpur',
+      'spigot': 'Spigot',
+      'bukkit': 'Bukkit',
+      'folia': 'Folia',
+      'datapack': 'Data Pack',
+      'quilt': 'Quilt',
+      'sponge': 'Sponge',
+      'bungeecord': 'BungeeCord',
+      'velocity': 'Velocity',
+      'waterfall': 'Waterfall',
+      'iris': 'Iris',
+      'optifine': 'OptiFine'
+    };
+    return map[loader.toLowerCase()] || (loader.charAt(0).toUpperCase() + loader.slice(1));
+  }
+
+  function compareMinecraftVersions(a, b) {
+    const pa = String(a).trim().split('.').map(n => parseInt(n, 10) || 0);
+    const pb = String(b).trim().split('.').map(n => parseInt(n, 10) || 0);
+    const maxLen = Math.max(pa.length, pb.length);
+    for (let i = 0; i < maxLen; i++) {
+      const na = pa[i] !== undefined ? pa[i] : 0;
+      const nb = pb[i] !== undefined ? pb[i] : 0;
+      if (na !== nb) return nb - na; // Descending: newest to oldest
+    }
+    return 0;
+  }
+
+  function formatRelativeTime(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHour = Math.floor(diffMin / 60);
+      const diffDay = Math.floor(diffHour / 24);
+      const diffWeek = Math.floor(diffDay / 7);
+      const diffMonth = Math.floor(diffDay / 30);
+      const diffYear = Math.floor(diffDay / 365);
+
+      if (diffYear >= 1) return `${diffYear} year${diffYear > 1 ? 's' : ''} ago`;
+      if (diffMonth >= 1) return `${diffMonth} month${diffMonth > 1 ? 's' : ''} ago`;
+      if (diffWeek >= 1) return `${diffWeek} week${diffWeek > 1 ? 's' : ''} ago`;
+      if (diffDay >= 1) return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`;
+      if (diffHour >= 1) return `${diffHour} hour${diffHour > 1 ? 's' : ''} ago`;
+      if (diffMin >= 1) return `${diffMin} minute${diffMin > 1 ? 's' : ''} ago`;
+      return 'just now';
+    } catch {
+      return '';
+    }
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KiB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  async function openModrinthDetailModal(project) {
+    currentDetailProject = project;
+    currentProjectVersions = [];
+    const modal = document.getElementById('modrinthDetailModal');
+    const icon = document.getElementById('detailProjectIcon');
+    const title = document.getElementById('detailProjectTitle');
+    const btnQuickInstall = document.getElementById('btnQuickInstallWorkspace');
+    const selectGameVer = document.getElementById('selectDlGameVersion');
+    const selectPlatform = document.getElementById('selectDlPlatform');
+    const releaseDisplay = document.getElementById('modrinthReleaseDisplay');
+
+    if (icon) icon.src = project.icon_url || 'assets/logo.png';
+    if (title) title.textContent = project.title;
+
+    if (btnQuickInstall) {
+      btnQuickInstall.disabled = false;
+      btnQuickInstall.innerHTML = `
+        <svg class="modrinth-app-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="m8 12 3 3 5-5"></path>
+        </svg>
+        <span>Install to Workspace</span>
+      `;
+    }
+
+    if (selectGameVer) selectGameVer.innerHTML = '<option value="">Select game version</option>';
+    if (selectPlatform) selectPlatform.innerHTML = '<option value="">Select platform</option>';
+    if (releaseDisplay) {
+      releaseDisplay.innerHTML = `
+        <div style="padding: 32px 16px; text-align: center; color: var(--text-muted);">
+          <div style="margin-bottom: 8px;">Fetching available releases from Modrinth...</div>
+        </div>
+      `;
+    }
+
+    if (modal) modal.style.display = 'flex';
+
+    try {
+      const vRes = await window.craftAgent.modrinth.getVersions(project.slug || project.project_id);
+      if (vRes && vRes.success && Array.isArray(vRes.versions) && vRes.versions.length > 0) {
+        currentProjectVersions = vRes.versions;
+
+        // 1. Unique official game versions only (strictly numbers & dots, exclude beta / snapshots with letters)
+        const gameVersionsSet = new Set();
+        currentProjectVersions.forEach(v => {
+          (v.game_versions || []).forEach(gv => {
+            const trimmed = String(gv).trim();
+            // Official release versions have ONLY numbers and dots (e.g. 26.2, 1.21.1)
+            // Filter out snapshot/beta versions that contain letters (e.g. 26.3-pre-2, 24w14a)
+            if (/^\d+(\.\d+)*$/.test(trimmed)) {
+              gameVersionsSet.add(trimmed);
+            }
+          });
+        });
+        // Sort descending from newest to oldest
+        const gameVersionsList = Array.from(gameVersionsSet).sort(compareMinecraftVersions);
+
+        // 2. Unique platforms / loaders
+        const platformsSet = new Set();
+        currentProjectVersions.forEach(v => {
+          (v.loaders || []).forEach(l => platformsSet.add(l.toLowerCase()));
+        });
+        const platformsList = Array.from(platformsSet);
+
+        // Populate Game Versions dropdown
+        if (selectGameVer) {
+          selectGameVer.innerHTML = '<option value="">Select game version</option>';
+          gameVersionsList.forEach(gv => {
+            const opt = document.createElement('option');
+            opt.value = gv;
+            opt.textContent = gv;
+            selectGameVer.appendChild(opt);
+          });
+        }
+
+        // Populate Platforms dropdown
+        if (selectPlatform) {
+          selectPlatform.innerHTML = '<option value="">Select platform</option>';
+          platformsList.forEach(plat => {
+            const opt = document.createElement('option');
+            opt.value = plat;
+            opt.textContent = formatLoaderName(plat);
+            selectPlatform.appendChild(opt);
+          });
+        }
+
+        // Auto-select latest official version & platform
+        let defaultVer = gameVersionsList[0] || '';
+        let defaultPlat = '';
+
+        for (const v of currentProjectVersions) {
+          const matchedOfficial = (v.game_versions || []).find(gv => gameVersionsList.includes(gv));
+          if (matchedOfficial) {
+            defaultVer = matchedOfficial;
+            defaultPlat = (v.loaders && v.loaders[0]?.toLowerCase()) || platformsList[0] || '';
+            break;
+          }
+        }
+        if (!defaultPlat) defaultPlat = platformsList[0] || '';
+
+        if (selectGameVer) selectGameVer.value = defaultVer;
+        if (selectPlatform) selectPlatform.value = defaultPlat;
+
+        // Wire dropdown change events
+        selectGameVer.onchange = () => renderSelectedRelease(selectGameVer.value, selectPlatform.value);
+        selectPlatform.onchange = () => renderSelectedRelease(selectGameVer.value, selectPlatform.value);
+
+        // Wire Quick Install button
+        if (btnQuickInstall) {
+          btnQuickInstall.onclick = async () => {
+            const targetVersion = getMatchedRelease(selectGameVer.value, selectPlatform.value) || currentProjectVersions[0];
+            if (!targetVersion) return;
+            const primaryFile = (targetVersion.files && targetVersion.files.length > 0)
+              ? (targetVersion.files.find(f => f.primary) || targetVersion.files[0])
+              : null;
+            if (!primaryFile) return;
+
+            btnQuickInstall.disabled = true;
+            btnQuickInstall.innerHTML = '<span>Installing to workspace...</span>';
+
+            try {
+              const dlRes = await window.craftAgent.modrinth.downloadFile({
+                fileUrl: primaryFile.url,
+                targetFilename: primaryFile.filename,
+                projectType: currentDetailProject.project_type || currentDiscoverType
+              });
+              if (dlRes && dlRes.success) {
+                btnQuickInstall.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Installed to ${escapeHtml(dlRes.relativePath)}</span>
+                `;
+              } else {
+                btnQuickInstall.innerHTML = '<span>Installation failed</span>';
+                setTimeout(() => {
+                  btnQuickInstall.disabled = false;
+                  btnQuickInstall.innerHTML = '<span>Install to Workspace</span>';
+                }, 2500);
+              }
+            } catch (dlErr) {
+              btnQuickInstall.innerHTML = '<span>Error installing</span>';
+            }
+          };
+        }
+
+        // Render current selection
+        await renderSelectedRelease(defaultVer, defaultPlat);
+      } else {
+        if (releaseDisplay) {
+          releaseDisplay.innerHTML = `
+            <div class="modrinth-empty-state">
+              <div style="font-weight: 600; color: #f0f6fc; margin-bottom: 4px;">No Releases Available</div>
+              <span>No published files found for this project on Modrinth.</span>
+            </div>
+          `;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to get versions:', err);
+      if (releaseDisplay) {
+        releaseDisplay.innerHTML = `
+          <div class="modrinth-empty-state" style="border-color: rgba(248, 81, 73, 0.4);">
+            <div style="font-weight: 600; color: #f85149; margin-bottom: 4px;">Error Loading Releases</div>
+            <span>${escapeHtml(err.message || 'Network error occurred while fetching versions.')}</span>
+          </div>
+        `;
+      }
+    }
+  }
+
+  function getMatchedRelease(gameVer, platform) {
+    if (!currentProjectVersions || currentProjectVersions.length === 0) return null;
+    return currentProjectVersions.find(v => {
+      const matchVer = !gameVer || (v.game_versions || []).includes(gameVer);
+      const matchPlat = !platform || (v.loaders || []).map(l => l.toLowerCase()).includes(platform.toLowerCase());
+      return matchVer && matchPlat;
+    });
+  }
+
+  async function renderSelectedRelease(gameVer, platform) {
+    const container = document.getElementById('modrinthReleaseDisplay');
+    if (!container) return;
+
+    if (!gameVer || !platform) {
+      container.innerHTML = `
+        <div class="modrinth-empty-state">
+          <span>Select both game version and platform above to view downloadable files.</span>
+        </div>
+      `;
+      return;
+    }
+
+    const matched = getMatchedRelease(gameVer, platform);
+    if (!matched) {
+      container.innerHTML = `
+        <div class="modrinth-empty-state">
+          <div style="font-weight: 600; color: #f0f6fc; margin-bottom: 4px;">No Compatible Release Found</div>
+          <span>No release found for Minecraft <strong>${escapeHtml(gameVer)}</strong> on <strong>${escapeHtml(formatLoaderName(platform))}</strong>.<br>Please select a different version or platform.</span>
+        </div>
+      `;
+      return;
+    }
+
+    const primaryFile = (matched.files && matched.files.length > 0)
+      ? (matched.files.find(f => f.primary) || matched.files[0])
+      : null;
+
+    if (!primaryFile) {
+      container.innerHTML = `
+        <div class="modrinth-empty-state">
+          <span>No downloadable files attached to release ${escapeHtml(matched.version_number)}.</span>
+        </div>
+      `;
+      return;
+    }
+
+    const badgeClass = matched.version_type === 'beta' ? 'badge-beta' : (matched.version_type === 'alpha' ? 'badge-alpha' : 'badge-release');
+    const timeAgo = formatRelativeTime(matched.date_published);
+    const fileSize = formatFileSize(primaryFile.size);
+
+    // Check dependencies
+    const validDeps = Array.isArray(matched.dependencies) ? matched.dependencies.filter(d => d.project_id) : [];
+    const hasDeps = validDeps.length > 0;
+
+    // Pre-resolve dependency project names/icons if not cached
+    const missingDepIds = validDeps.filter(d => !dependencyProjectsCache[d.project_id]).map(d => d.project_id);
+    if (missingDepIds.length > 0) {
+      try {
+        const depRes = await window.craftAgent.modrinth.getProjects(missingDepIds);
+        if (depRes && depRes.success && Array.isArray(depRes.projects)) {
+          depRes.projects.forEach(p => {
+            dependencyProjectsCache[p.id] = p;
+          });
+        }
+      } catch (depErr) {
+        console.warn('Failed to resolve dependency projects:', depErr);
+      }
+    }
+
+    let depsHtml = '';
+    if (hasDeps) {
+      let depItemsHtml = '';
+      validDeps.forEach(dep => {
+        const depProject = dependencyProjectsCache[dep.project_id];
+        const depTitle = depProject ? depProject.title : (dep.file_name || 'Required Mod');
+        const depIcon = depProject?.icon_url || 'assets/logo.png';
+        const depTypeLabel = dep.dependency_type === 'optional' ? 'Optional' : 'Any compatible';
+
+        depItemsHtml += `
+          <div class="modrinth-dep-item" data-dep-id="${dep.project_id}">
+            <div class="modrinth-dep-left">
+              <img src="${escapeHtml(depIcon)}" alt="dep" class="modrinth-dep-icon" />
+              <div class="modrinth-dep-name">${escapeHtml(depTitle)}</div>
+              <div class="modrinth-dep-badge">${escapeHtml(depTypeLabel)}</div>
+            </div>
+            <button class="btn-modrinth-icon-dl btn-dep-dl" data-dep-id="${dep.project_id}" data-dep-title="${escapeHtml(depTitle)}" title="Download ${escapeHtml(depTitle)}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </button>
+          </div>
+        `;
+      });
+
+      depsHtml = `
+        <div class="modrinth-deps-section">
+          <div class="modrinth-deps-title">Dependencies</div>
+          <div class="modrinth-deps-list">
+            ${depItemsHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    // Build the complete card and actions
+    const fileExt = primaryFile.filename.split('.').pop() || 'jar';
+
+    container.innerHTML = `
+      <!-- Main Release Card -->
+      <div class="modrinth-release-card">
+        <div class="modrinth-release-left">
+          <div class="modrinth-release-title-row">
+            <span class="modrinth-release-version-name">${escapeHtml(matched.version_number || matched.name)}</span>
+            <span class="modrinth-release-badge ${badgeClass}">${escapeHtml(matched.version_type || 'Release')}</span>
+          </div>
+          <div class="modrinth-release-meta">
+            <span>${escapeHtml(timeAgo)} • ${escapeHtml(fileSize)}</span>
+          </div>
+        </div>
+        <button id="btnDlCardIcon" class="btn-modrinth-icon-dl" title="Download ${escapeHtml(primaryFile.filename)}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Dependencies -->
+      ${depsHtml}
+
+      <!-- Bottom Actions -->
+      <div class="modrinth-dl-bottom-row">
+        <button id="btnDetailAnalyzeRelease" class="btn-dl-ai-audit" title="Audit this specific version with AI">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          <span>Analyze with AI</span>
+        </button>
+
+        <button id="btnDlPrimaryFile" class="btn-dl-secondary" title="Download ${escapeHtml(primaryFile.filename)}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Download (.${escapeHtml(fileExt)})</span>
+        </button>
+
+        ${hasDeps ? `
+          <button id="btnDlWithDeps" class="btn-dl-deps-primary" title="Download mod and all required dependencies">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Download with deps</span>
+          </button>
+        ` : ''}
+      </div>
+    `;
+
+    // Wire individual release download button (card icon)
+    const btnCardIcon = container.querySelector('#btnDlCardIcon');
+    if (btnCardIcon) {
+      btnCardIcon.onclick = () => handleDownloadPrimaryFile(matched, primaryFile, btnCardIcon);
+    }
+
+    // Wire bottom download button
+    const btnDlPrimary = container.querySelector('#btnDlPrimaryFile');
+    if (btnDlPrimary) {
+      btnDlPrimary.onclick = () => handleDownloadPrimaryFile(matched, primaryFile, btnDlPrimary);
+    }
+
+    // Wire AI audit button
+    const btnAudit = container.querySelector('#btnDetailAnalyzeRelease');
+    if (btnAudit) {
+      btnAudit.onclick = () => {
+        closeModrinthDetailModal();
+        triggerAiAnalysis(currentDetailProject, matched);
+      };
+    }
+
+    // Wire Download with deps button
+    const btnDlDeps = container.querySelector('#btnDlWithDeps');
+    if (btnDlDeps) {
+      btnDlDeps.onclick = () => handleDownloadWithDeps(matched, primaryFile, validDeps, gameVer, platform, btnDlDeps);
+    }
+
+    // Wire individual dependency download buttons
+    container.querySelectorAll('.btn-dep-dl').forEach(depBtn => {
+      depBtn.onclick = async () => {
+        const depId = depBtn.getAttribute('data-dep-id');
+        const depTitle = depBtn.getAttribute('data-dep-title');
+        await handleDownloadSingleDependency(depId, depTitle, gameVer, platform, depBtn);
+      };
+    });
+  }
+
+  async function handleDownloadPrimaryFile(version, file, btn) {
+    if (!file) return;
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    if (btn.tagName === 'BUTTON' && btn.classList.contains('btn-modrinth-icon-dl')) {
+      btn.innerHTML = '<span style="font-size: 11px;">...</span>';
+    } else {
+      btn.innerHTML = '<span>Downloading...</span>';
+    }
+
+    try {
+      const dlRes = await window.craftAgent.modrinth.downloadFile({
+        fileUrl: file.url,
+        targetFilename: file.filename,
+        projectType: currentDetailProject?.project_type || currentDiscoverType
+      });
+
+      if (dlRes && dlRes.success) {
+        if (btn.classList.contains('btn-modrinth-icon-dl')) {
+          btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        } else {
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Downloaded</span>';
+          btn.style.color = '#22c55e';
+          btn.style.borderColor = '#22c55e';
+        }
+      } else {
+        btn.innerHTML = '<span>Failed</span>';
+        setTimeout(() => { btn.disabled = false; btn.innerHTML = origHtml; }, 2000);
+      }
+    } catch (err) {
+      console.error('Download error:', err);
+      btn.innerHTML = '<span>Error</span>';
+      setTimeout(() => { btn.disabled = false; btn.innerHTML = origHtml; }, 2000);
+    }
+  }
+
+  async function handleDownloadSingleDependency(depProjectId, depTitle, gameVer, platform, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span style="font-size: 10px;">...</span>';
+
+    try {
+      // Find compatible release for this dependency
+      const depVersionsRes = await window.craftAgent.modrinth.getVersions(depProjectId, [platform], [gameVer]);
+      const depVersions = (depVersionsRes && depVersionsRes.success) ? depVersionsRes.versions : [];
+      const match = depVersions[0] || null;
+      const file = match?.files?.find(f => f.primary) || match?.files?.[0];
+
+      if (file) {
+        const dlRes = await window.craftAgent.modrinth.downloadFile({
+          fileUrl: file.url,
+          targetFilename: file.filename,
+          projectType: 'mod'
+        });
+
+        if (dlRes && dlRes.success) {
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        } else {
+          btn.innerHTML = '<span style="font-size: 10px;">!</span>';
+        }
+      } else {
+        btn.innerHTML = '<span style="font-size: 10px;">N/A</span>';
+      }
+    } catch (err) {
+      console.error('Failed to download dependency:', err);
+      btn.innerHTML = '<span style="font-size: 10px;">Err</span>';
+    }
+  }
+
+  async function handleDownloadWithDeps(version, primaryFile, deps, gameVer, platform, btn) {
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span>Downloading with deps...</span>';
+
+    try {
+      // 1. Download primary file
+      await window.craftAgent.modrinth.downloadFile({
+        fileUrl: primaryFile.url,
+        targetFilename: primaryFile.filename,
+        projectType: currentDetailProject?.project_type || currentDiscoverType
+      });
+
+      // 2. Download all required dependencies
+      for (const dep of deps) {
+        try {
+          const depVersionsRes = await window.craftAgent.modrinth.getVersions(dep.project_id, [platform], [gameVer]);
+          const depVersions = (depVersionsRes && depVersionsRes.success) ? depVersionsRes.versions : [];
+          const match = depVersions[0] || null;
+          const file = match?.files?.find(f => f.primary) || match?.files?.[0];
+          if (file) {
+            await window.craftAgent.modrinth.downloadFile({
+              fileUrl: file.url,
+              targetFilename: file.filename,
+              projectType: 'mod'
+            });
+          }
+        } catch (depErr) {
+          console.warn('Dependency download error:', dep.project_id, depErr);
+        }
+      }
+
+      btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>Downloaded with deps!</span>
+      `;
+    } catch (err) {
+      console.error('Download with deps failed:', err);
+      btn.innerHTML = '<span>Download failed</span>';
+      setTimeout(() => { btn.disabled = false; btn.innerHTML = origHtml; }, 2500);
+    }
+  }
+
+  function closeModrinthDetailModal() {
+    const modal = document.getElementById('modrinthDetailModal');
+    if (modal) modal.style.display = 'none';
+    currentDetailProject = null;
+    currentProjectVersions = [];
+  }
+
+  async function triggerAiAnalysis(project, selectedVersion = null) {
+    // 1. Create dedicated analysis session isolated from main coding chat
+    const analysisTitle = `[Audit] ${project.title}`;
+    const newSessionId = `session_audit_${Date.now()}`;
+    const newSession = {
+      id: newSessionId,
+      title: analysisTitle,
+      type: 'analysis',
+      projectSlug: project.slug,
+      messages: [],
+      createdAt: Date.now()
+    };
+
+    sessions.unshift(newSession);
+    saveSessionsToStorage();
+    renderSessionsList();
+    await switchSession(newSessionId);
+
+    // 2. Return to chat interface
+    closeDiscoverView();
+
+    // 3. Formulate audit prompt
+    const categories = project.categories ? project.categories.join(', ') : 'N/A';
+    const versions = project.versions ? project.versions.slice(0, 10).join(', ') : 'N/A';
+    const verDetail = selectedVersion 
+      ? `Versi Terpilih: ${selectedVersion.name} (${selectedVersion.version_number}) | Loaders: ${(selectedVersion.loaders || []).join(', ')}` 
+      : `Versi Terbaru: ${project.latest_version || 'Latest'}`;
+
+    const promptText = `Tolong lakukan audit keamanan, fungsionalitas, dan analisa komprehensif untuk ${project.project_type || 'plugin/mod'} Minecraft berikut:
+
+**Project Details**:
+- **Nama**: ${project.title}
+- **Author**: ${project.author}
+- **Slug / ID**: ${project.slug}
+- **Tipe Project**: ${project.project_type || currentDiscoverType}
+- **Kategori / Loaders**: ${categories}
+- **Versi Minecraft**: ${versions}
+- **${verDetail}**
+- **Ringkasan**: ${project.description}
+
+**Mohon berikan laporan audit terstruktur mencakup**:
+1. **Keamanan & Integritas**: Apakah ada risiko kode berbahaya, izin berbahaya, file access tak wajar, atau endpoint eksternal?
+2. **Daftar Fitur & Mekanik**: Apa saja fitur utama, commands, dan fungsionalitas yang ditambahkan?
+3. **Performa & Dampak Server**: Efisiensi TPS/tick, memori footprint, dan apakah mendukung asynchronous/Folia.
+4. **Kompatibilitas Platform**: Kecocokan platform (Paper, Purpur, Spigot, Fabric, Forge) dan dependensi yang dibutuhkan.
+5. **Panduan Konfigurasi**: Rekomendasi pengaturan awal dan permissions penting untuk server admin.`;
+
+    // 4. Send directly to AI
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+      chatInput.value = promptText;
+      sendMessage();
+    }
+  }
+
+  function setupDiscoverContent() {
+    const btnDiscoverContent = document.getElementById('btnDiscoverContent');
+    const btnBackToChat = document.getElementById('btnBackToChat');
+    const searchInput = document.getElementById('modrinthSearchInput');
+    const btnClearSearch = document.getElementById('btnClearSearch');
+    const versionSelect = document.getElementById('modrinthVersionSelect');
+    const platformSelect = document.getElementById('modrinthPlatformSelect');
+    const sortSelect = document.getElementById('modrinthSortSelect');
+    const pillTabs = document.getElementById('modrinthPillTabs');
+    const btnLoadMore = document.getElementById('btnModrinthLoadMore');
+    const btnCloseDetail = document.getElementById('btnCloseModrinthDetail');
+    const btnCloseDetailBottom = document.getElementById('btnCloseModrinthDetailBottom');
+
+    if (btnDiscoverContent) {
+      btnDiscoverContent.onclick = openDiscoverView;
+    }
+    if (btnBackToChat) {
+      btnBackToChat.onclick = closeDiscoverView;
+    }
+
+    if (btnCloseDetail) btnCloseDetail.onclick = closeModrinthDetailModal;
+    if (btnCloseDetailBottom) btnCloseDetailBottom.onclick = closeModrinthDetailModal;
+
+    // Pill Tab Switching (Mods, Resource Packs, Data Packs, Shaders, Modpacks, Plugins)
+    if (pillTabs) {
+      pillTabs.querySelectorAll('.modrinth-pill-btn').forEach(btn => {
+        btn.onclick = () => {
+          pillTabs.querySelectorAll('.modrinth-pill-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentDiscoverType = btn.getAttribute('data-type');
+          fetchModrinthProjects(true);
+        };
+      });
+    }
+
+    // Debounced search input
+    if (searchInput) {
+      searchInput.oninput = () => {
+        if (btnClearSearch) btnClearSearch.style.display = searchInput.value ? 'block' : 'none';
+        clearTimeout(discoverSearchTimer);
+        discoverSearchTimer = setTimeout(() => {
+          fetchModrinthProjects(true);
+        }, 350);
+      };
+    }
+
+    if (btnClearSearch && searchInput) {
+      btnClearSearch.onclick = () => {
+        searchInput.value = '';
+        btnClearSearch.style.display = 'none';
+        fetchModrinthProjects(true);
+      };
+    }
+
+    if (versionSelect) {
+      versionSelect.onchange = () => fetchModrinthProjects(true);
+    }
+    if (platformSelect) {
+      platformSelect.onchange = () => fetchModrinthProjects(true);
+    }
+    if (sortSelect) {
+      sortSelect.onchange = () => fetchModrinthProjects(true);
+    }
+
+    if (btnLoadMore) {
+      btnLoadMore.onclick = () => fetchModrinthProjects(false);
+    }
+  }
   function formatMarkdown(text) {
     if (!text) return '';
 

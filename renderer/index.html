@@ -40,47 +40,23 @@
         </button>
       </div>
 
-      <div class="top-actions">
-        <button id="btnNewChat" class="btn btn-sm btn-new-chat" title="Create New Chat Session">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          <span>New Chat</span>
-        </button>
-
-        <div class="model-badge" id="currentModelBadge" title="Active Model">
-          <span class="model-dot"></span>
-          <span id="currentModelName">gpt-5.6-terra</span>
-        </div>
-
-        <button id="btnToggleConsole" class="icon-button" title="Toggle Console Log (Hide/Show)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="4 17 10 11 4 5"></polyline>
-            <line x1="12" y1="19" x2="20" y2="19"></line>
-          </svg>
-        </button>
-
-        <button id="btnClearChat" class="icon-button" title="Clear Current Chat">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
-        </button>
-
-        <button id="btnOpenSettings" class="icon-button" title="Settings">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
-      </div>
+      <div class="top-bar-spacer"></div>
     </header>
 
     <!-- App Body Area with Sessions Drawer -->
     <div class="app-body-layout">
       <!-- Sessions Drawer Sidebar (collapsible) -->
       <aside class="sessions-sidebar" id="sessionsSidebar">
+        <div class="sidebar-discover-top">
+          <button id="btnDiscoverContent" class="btn-sidebar-discover" title="Discover Minecraft mods, plugins, and packs from Modrinth">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+            </svg>
+            <span>Discover Content</span>
+          </button>
+        </div>
+
         <div class="sessions-top">
           <span class="sessions-title">Chat Sessions</span>
           <button id="btnNewChatSidebar" class="btn-icon-sm" title="New Chat">
@@ -92,6 +68,41 @@
         </div>
         <div class="sessions-list" id="sessionsList">
           <!-- Populated dynamically -->
+        </div>
+
+        <div class="sessions-bottom">
+          <!-- Interactive Usage Card -->
+          <div class="sidebar-usage-card" id="xkiroQuotaBadge" title="Click to view detailed xKiro Quota & Balance">
+            <div class="usage-card-header">
+              <div class="usage-card-title-wrap">
+                <svg class="usage-bolt-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <span class="usage-card-title">Daily Tokens</span>
+              </div>
+              <span class="usage-card-pct" id="sidebarQuotaPct">100%</span>
+            </div>
+
+            <!-- Progress bar track -->
+            <div class="usage-progress-bar">
+              <div class="usage-progress-fill" id="sidebarQuotaProgressFill" style="width: 100%;"></div>
+            </div>
+
+            <!-- Stats row -->
+            <div class="usage-card-footer">
+              <span class="usage-tokens-left" id="xkiroQuotaText">Checking limit...</span>
+              <span class="usage-view-details">Details &rarr;</span>
+            </div>
+          </div>
+
+          <!-- Settings Button Row -->
+          <button id="btnOpenSettings" class="btn-sidebar-full-settings" title="Settings & Preferences">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span>Settings & Preferences</span>
+          </button>
         </div>
       </aside>
 
@@ -110,16 +121,20 @@
 
               <div class="quick-chips">
                 <button class="chip" data-prompt="Scan this workspace structure and tell me what project this is.">
-                  📁 Scan Workspace
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                  <span>Scan Workspace</span>
                 </button>
                 <button class="chip" data-prompt="Create a Paper 1.20+ PlayerJoinEvent plugin using Gradle (build.gradle) with gradlew.">
-                  ⚡ Create Plugin (Gradle)
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                  <span>Create Plugin (Gradle)</span>
                 </button>
                 <button class="chip" data-prompt="Compile this project using './gradlew build' to produce a jar.">
-                  🔨 Build Jar with Gradle
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                  <span>Build Jar with Gradle</span>
                 </button>
                 <button class="chip" data-prompt="Tolong installin Maven di Windows.">
-                  📦 Install Maven (winget)
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                  <span>Install Maven (winget)</span>
                 </button>
               </div>
             </div>
@@ -139,33 +154,220 @@
               <!-- Attachment Preview Bar -->
               <div class="attachment-preview-bar" id="attachmentPreviewBar" style="display: none;"></div>
 
-              <div class="input-wrapper" id="inputWrapper">
-                <button id="btnAttachFile" class="btn-attach" type="button" title="Attach file, JAR, or photo (or drag-and-drop / Ctrl+V paste)">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+              <!-- Floating Model Selector Popup -->
+              <div class="model-select-popup" id="modelSelectPopup" style="display: none;">
+                <div class="model-popup-search-bar">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="model-search-icon">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                   </svg>
-                </button>
+                  <input type="text" id="modelPopupSearch" placeholder="Search models (e.g. gpt, claude, deepseek)..." autocomplete="off" />
+                  <button id="btnClearModelSearch" class="btn-clear-search" style="display: none;" title="Clear search">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+                <div class="model-popup-list" id="modelPopupList">
+                  <!-- Populated dynamically with optgroups and items -->
+                </div>
+              </div>
+
+              <!-- Floating Security Mode Popup (Photo 2) -->
+              <div class="security-mode-popup" id="securityModePopup" style="display: none;">
+                <div class="security-popup-header">
+                  <span class="security-popup-title">How should Craft Agent actions be approved?</span>
+                  <span class="security-popup-hint">Security Policy</span>
+                </div>
+
+                <div class="security-popup-options">
+                  <!-- Option 1: Ask for approval -->
+                  <div class="security-option" data-mode="approval" id="secOptionApproval">
+                    <div class="security-option-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
+                        <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6"></path>
+                        <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
+                        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
+                      </svg>
+                    </div>
+                    <div class="security-option-content">
+                      <div class="security-option-title">Ask for approval</div>
+                      <div class="security-option-desc">Always ask to edit external files and execute commands</div>
+                    </div>
+                    <div class="security-option-check">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                  </div>
+
+                  <!-- Option 2: Approve for me -->
+                  <div class="security-option" data-mode="approve-for-me" id="secOptionApproveForMe">
+                    <div class="security-option-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                      </svg>
+                    </div>
+                    <div class="security-option-content">
+                      <div class="security-option-title">Approve for me</div>
+                      <div class="security-option-desc">Only ask for actions detected as potentially unsafe</div>
+                    </div>
+                    <div class="security-option-check">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                  </div>
+
+                  <!-- Option 3: Full access -->
+                  <div class="security-option option-full-access" data-mode="full-access" id="secOptionFullAccess">
+                    <div class="security-option-icon text-warning">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                      </svg>
+                    </div>
+                    <div class="security-option-content">
+                      <div class="security-option-title">Full access</div>
+                      <div class="security-option-desc">Unrestricted access to execute commands and external files</div>
+                    </div>
+                    <div class="security-option-check">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="input-wrapper" id="inputWrapper">
                 <input type="file" id="fileUploadInput" multiple style="display: none;" />
 
                 <textarea 
                   id="chatInput" 
-                  placeholder="Ask Craft Agent to inspect code, build plugins, run commands... (Paste screenshot or drop files)" 
+                  placeholder="Write a message... (Paste screenshot or drop files)" 
                   rows="1"
                 ></textarea>
-                <button id="btnSendMessage" class="btn-send" title="Send Message (Ctrl+Enter)">
-                  <svg id="iconSend" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                  </svg>
-                  <svg id="iconStop" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
-                    <rect x="4" y="4" width="16" height="16" rx="2"></rect>
-                  </svg>
-                </button>
+
+                <div class="input-actions-bar">
+                  <div class="input-actions-left">
+                    <button id="btnAttachFile" class="btn-attach" type="button" title="Attach file, JAR, or photo (or drag-and-drop / Ctrl+V paste)">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div class="input-actions-right">
+                    <!-- Model Selector Pill (Photo 1) -->
+                    <button id="btnSelectModelInput" class="input-action-pill" type="button" title="Click to choose AI model">
+                      <span class="pill-model-name" id="currentModelName">gpt-5.6-terra</span>
+                      <svg class="pill-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+
+                    <!-- Security Mode Pill (Photo 2) -->
+                    <button id="btnSecurityModeInput" class="input-action-pill" type="button" title="Approval & Security Mode">
+                      <span class="pill-security-icon" id="securityPillIcon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
+                          <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6"></path>
+                          <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
+                          <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
+                        </svg>
+                      </span>
+                      <span class="pill-security-label" id="securityPillLabel">Approval</span>
+                    </button>
+
+                    <!-- Send Button (Photo 1) -->
+                    <button id="btnSendMessage" class="btn-send" title="Send Message (Enter)">
+                      <svg id="iconSend" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                        <polyline points="5 12 12 5 19 12"></polyline>
+                      </svg>
+                      <svg id="iconStop" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                        <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
               <div class="input-footer">
                 <span class="shortcut-tip">Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for newline</span>
                 <span class="memory-badge" title="Sliding window context size">15-msg Sliding Window</span>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Left Panel Alternate: Discover Panel (Modrinth Hub) -->
+        <section class="panel panel-discover" id="discoverPanel" style="display: none;">
+          <div class="discover-top-bar">
+            <button id="btnBackToChat" class="btn btn-sm btn-back-chat" title="Back to Chat Interface">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+              <span>Back to Chat</span>
+            </button>
+
+            <div class="discover-search-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="modrinthSearchInput" placeholder="Search mods, plugins, datapacks, shaders, resourcepacks..." />
+              <button id="btnClearSearch" class="btn-clear-search" style="display: none;" title="Clear search">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+
+            <div class="discover-filters">
+              <select id="modrinthVersionSelect" class="filter-select" title="Filter by Minecraft Game Version">
+                <option value="all">All Versions</option>
+              </select>
+
+              <select id="modrinthPlatformSelect" class="filter-select" title="Filter by Platform / Loader">
+                <option value="all">All Platforms</option>
+              </select>
+
+              <select id="modrinthSortSelect" class="filter-select" title="Sort Order">
+                <option value="downloads">Most Downloads</option>
+                <option value="relevance">Relevance</option>
+                <option value="updated">Recently Updated</option>
+                <option value="newest">Newest</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Category Pill Tabs (exact matching user reference image) -->
+          <div class="modrinth-pill-tabs-container">
+            <div class="modrinth-pill-tabs" id="modrinthPillTabs">
+              <button class="modrinth-pill-btn" data-type="mod">Mods</button>
+              <button class="modrinth-pill-btn" data-type="resourcepack">Resource Packs</button>
+              <button class="modrinth-pill-btn" data-type="datapack">Data Packs</button>
+              <button class="modrinth-pill-btn" data-type="shader">Shaders</button>
+              <button class="modrinth-pill-btn" data-type="modpack">Modpacks</button>
+              <button class="modrinth-pill-btn active" data-type="plugin">Plugins</button>
+            </div>
+          </div>
+
+          <!-- Grid & Content Container -->
+          <div class="discover-content-scroll" id="discoverContentScroll">
+            <div class="discover-status-bar">
+              <span id="discoverResultCount">Showing popular plugins from Modrinth</span>
+              <span id="discoverActiveFilterBadge" class="filter-badge" style="display: none;"></span>
+            </div>
+
+            <div class="modrinth-grid" id="modrinthGrid">
+              <!-- Cards rendered dynamically -->
+            </div>
+
+            <div class="discover-loading" id="discoverLoading" style="display: none;">
+              <div class="loading-spinner"></div>
+              <span>Searching Modrinth...</span>
+            </div>
+
+            <div class="discover-load-more" id="discoverLoadMoreWrap" style="display: none;">
+              <button id="btnModrinthLoadMore" class="btn btn-secondary">Load More Projects</button>
             </div>
           </div>
         </section>
@@ -257,7 +459,12 @@
           </div>
 
           <p class="modal-subtext" id="confirmModalSubtext">
-            ⚠️ Only approve actions you trust. Execution runs on your local machine.
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--danger); vertical-align: middle; margin-right: 4px;">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            Only approve actions you trust. Execution runs on your local machine.
           </p>
         </div>
 
@@ -277,7 +484,12 @@
       <div class="modal-card modal-settings">
         <div class="modal-header">
           <h3>Settings & Preferences</h3>
-          <button id="btnCloseSettings" class="btn-close">&times;</button>
+          <button id="btnCloseSettings" class="btn-close" title="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
 
         <div class="modal-body scrollable-form">
@@ -297,16 +509,7 @@
                 <input type="password" id="cfgApiKey" placeholder="Enter your xKiro API key..." />
                 <button type="button" id="btnToggleApiKey" class="btn-text-sm">Show</button>
               </div>
-              <span class="field-hint">Your API key is stored securely in your local profile.</span>
-            </div>
-
-            <div class="form-field">
-              <label for="cfgModel">Model Selection (100+ Available)</label>
-              <input type="text" id="cfgModelSearch" placeholder="🔍 Search models (e.g. deepseek, claude, gpt, flash)..." class="model-search-input" />
-              <select id="cfgModel" class="form-select">
-                <!-- Populated dynamically with optgroups for all vendors -->
-              </select>
-              <span class="field-hint" id="modelSearchHint">Default: openai/gpt-5.6-terra (best balance of speed, cost & tool calling)</span>
+              <span class="field-hint">Your API key is stored securely in your local profile. Model selection can be changed directly from the chat input bar.</span>
             </div>
           </div>
 
@@ -317,12 +520,14 @@
             <div class="form-field">
               <label for="cfgSecurityMode">Execution Permission Mode</label>
               <select id="cfgSecurityMode" class="form-select">
-                <option value="approval">Approval Required (Minta Izin Konfirmasi)</option>
+                <option value="approval">Ask for approval (Selalu Minta Izin Konfirmasi)</option>
+                <option value="approve-for-me">Approve for me (Hanya Minta Izin untuk Tindakan Berbahaya)</option>
                 <option value="full-access">Full Access (Otonom Penuh - Tanpa Izin)</option>
               </select>
               <span class="field-hint" id="securityModeHint">
-                • <strong>Approval:</strong> Sistem akan memunculkan dialog konfirmasi (Yes/No) sebelum setiap command dijalankan (Sangat Aman).<br>
-                • <strong>Full Access:</strong> AI otomatis mengeksekusi terminal command tanpa perlu popup konfirmasi (Lebih Cepat & Otonom Penuh).
+                • <strong>Ask for approval:</strong> Sistem meminta konfirmasi untuk semua command terminal dan file eksternal.<br>
+                • <strong>Approve for me:</strong> Auto-approve command aman, hanya minta izin jika perintah terdeteksi destruktif atau akses path luar.<br>
+                • <strong>Full Access:</strong> AI otomatis mengeksekusi semua tindakan tanpa popup konfirmasi.
               </span>
             </div>
           </div>
@@ -388,17 +593,233 @@
 
     <!-- Fullscreen Image Lightbox Modal -->
     <div id="imageLightboxModal" class="lightbox-modal" style="display: none;">
-    <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
-    <div class="lightbox-container">
-      <div class="lightbox-header">
-        <span id="lightboxImageTitle" class="lightbox-title">Image Preview</span>
-        <button id="btnCloseLightbox" class="btn-icon lightbox-close-btn" title="Close (Esc)">✕</button>
-      </div>
-      <div class="lightbox-body">
-        <img id="lightboxImageEl" src="" alt="Full preview" class="lightbox-img" />
+      <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
+      <div class="lightbox-container">
+        <div class="lightbox-header">
+          <span id="lightboxImageTitle" class="lightbox-title">Image Preview</span>
+          <button id="btnCloseLightbox" class="btn-close lightbox-close-btn" title="Close (Esc)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="lightbox-body">
+          <img id="lightboxImageEl" src="" alt="Full preview" class="lightbox-img" />
+        </div>
       </div>
     </div>
-  </div>
+
+    <!-- xKiro Quota & Limit Modal -->
+    <div class="modal-overlay" id="quotaModal" style="display: none;">
+      <div class="modal-card modal-quota">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <svg class="modal-title-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--warning);">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            <h3>xKiro API Quota & Usage</h3>
+          </div>
+          <button class="btn-close" id="btnCloseQuota" title="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="quota-stat-card">
+            <div class="quota-stat-header">
+              <span>Free Daily Token Allowance</span>
+              <strong id="quotaTokensPercentage">100% Remaining</strong>
+            </div>
+            <div class="quota-progress-track">
+              <div class="quota-progress-fill" id="quotaProgressFill" style="width: 100%;"></div>
+            </div>
+            <div class="quota-stat-numbers">
+              <div>Used Today: <strong id="quotaTokensUsed">0</strong></div>
+              <div>Limit: <strong id="quotaTokensLimit">5,000,000</strong></div>
+              <div>Remaining: <strong id="quotaTokensRemaining" class="text-success">5,000,000</strong></div>
+            </div>
+          </div>
+
+          <div class="quota-grid-row">
+            <div class="quota-mini-card">
+              <span class="mini-label">Wallet Balance</span>
+              <span class="mini-value text-accent" id="quotaWalletBalance">$0.00 USD</span>
+            </div>
+            <div class="quota-mini-card">
+              <span class="mini-label">Held Balance</span>
+              <span class="mini-value" id="quotaWalletHeld">$0.00 USD</span>
+            </div>
+            <div class="quota-mini-card">
+              <span class="mini-label">Account Plan</span>
+              <span class="mini-value" id="quotaAccountPlan">Free Tier</span>
+            </div>
+          </div>
+
+          <div class="quota-info-notice">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <span>Quota is managed automatically by xKiro Gateway. Free tokens reset every 24 hours.</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="btnRefreshQuota" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>Refresh Live Quota</span>
+          </button>
+          <button id="btnCloseQuotaBottom" class="btn btn-primary">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modrinth Project Download Modal (Official Modrinth Design) -->
+    <div class="modal-overlay" id="modrinthDetailModal" style="display: none;">
+      <div class="modal-card modal-modrinth-download">
+        <!-- Modal Header -->
+        <div class="modal-header modrinth-dl-header">
+          <div class="modrinth-dl-header-left">
+            <img id="detailProjectIcon" src="" alt="icon" class="modrinth-dl-icon" />
+            <h3 class="modrinth-dl-title">Download <span id="detailProjectTitle">Project</span></h3>
+          </div>
+          <button class="btn-close" id="btnCloseModrinthDetail" title="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body modrinth-dl-body">
+          <!-- Quick Install Button (Modrinth App style) -->
+          <button id="btnQuickInstallWorkspace" class="btn-modrinth-quick-install" title="Download & install directly into your workspace folder">
+            <svg class="modrinth-app-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="m8 12 3 3 5-5"></path>
+            </svg>
+            <span id="txtQuickInstall">Install to Workspace</span>
+          </button>
+
+          <!-- Divider: Download manually -->
+          <div class="modrinth-dl-divider">
+            <span>Download manually</span>
+          </div>
+
+          <!-- Selectors: Game Version & Platform -->
+          <div class="modrinth-filter-row">
+            <div class="modrinth-select-wrap">
+              <select id="selectDlGameVersion" class="modrinth-select" title="Select game version">
+                <option value="">Select game version</option>
+              </select>
+              <svg class="select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+            <div class="modrinth-select-wrap">
+              <select id="selectDlPlatform" class="modrinth-select" title="Select platform">
+                <option value="">Select platform</option>
+              </select>
+              <svg class="select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Dynamic Release & Dependencies Display -->
+          <div id="modrinthReleaseDisplay" class="modrinth-release-display">
+            <!-- Populated dynamically: release card, dependencies, action buttons -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visual Diff Modal -->
+    <div class="modal-overlay" id="diffModal" style="display: none;">
+      <div class="modal-card modal-diff">
+        <div class="modal-header">
+          <div class="diff-header-info">
+            <svg class="diff-file-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <h3 id="diffModalFilePath">src/main/java/Plugin.java</h3>
+            <div class="diff-stats-badges" id="diffModalStats">
+              <span class="diff-stat-plus">+0</span>
+              <span class="diff-stat-minus">-0</span>
+            </div>
+          </div>
+          <div class="diff-header-controls">
+            <div class="diff-view-toggle">
+              <button class="btn-toggle active" id="btnDiffUnified">Unified</button>
+              <button class="btn-toggle" id="btnDiffSplit">Split</button>
+            </div>
+            <button class="btn-close" id="btnCloseDiff" title="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-body diff-modal-body">
+          <div class="diff-viewer-wrapper" id="diffViewerWrapper">
+            <!-- Diff table rendered here -->
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btnCopyDiffContent" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Copy Diff</span>
+          </button>
+          <button id="btnCloseDiffBottom" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Chat Session Confirmation Modal -->
+    <div class="modal-overlay" id="deleteSessionModal" style="display: none;">
+      <div class="modal-card modal-delete-session">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--danger);">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <h3>Delete Chat Session</h3>
+          </div>
+          <button class="btn-close" id="btnCloseDeleteSession" title="Cancel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="delete-modal-text">Are you sure you want to delete this chat session? All messages and conversation context in this session will be permanently removed.</p>
+          <div class="delete-session-target" id="deleteSessionTargetTitle"></div>
+        </div>
+        <div class="modal-actions">
+          <button id="btnCancelDeleteSession" class="btn btn-secondary">Cancel</button>
+          <button id="btnConfirmDeleteSession" class="btn btn-danger">Delete Session</button>
+        </div>
+      </div>
+    </div>
 
   <script src="app.js"></script>
 </body>

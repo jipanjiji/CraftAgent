@@ -24,6 +24,21 @@ contextBridge.exposeInMainWorld('craftAgent', {
   resetSettings: () => ipcRenderer.invoke('settings:reset'),
   getModelsCatalog: () => ipcRenderer.invoke('settings:get-models'),
 
+  // API Quota & Usage
+  getApiUsage: () => ipcRenderer.invoke('api:get-usage'),
+
+  // Modrinth Hub & Discover Content
+  modrinth: {
+    search: (params) => ipcRenderer.invoke('modrinth:search', params),
+    getProject: (slugOrId) => ipcRenderer.invoke('modrinth:get-project', slugOrId),
+    getProjects: (ids) => ipcRenderer.invoke('modrinth:get-projects', ids),
+    getVersions: (slugOrId, loaders, gameVersions) => ipcRenderer.invoke('modrinth:get-versions', { slugOrId, loaders, gameVersions }),
+    downloadFile: (params) => ipcRenderer.invoke('modrinth:download-file', params)
+  },
+
+  // Visual Diff
+  generateDiff: (oldText, newText, filePath) => ipcRenderer.invoke('diff:generate', { oldText, newText, filePath }),
+
   // Event Listeners from Main to Renderer
   onStreamChunk: (callback) => {
     const handler = (_, chunk) => callback(chunk);

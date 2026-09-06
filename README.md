@@ -14,7 +14,7 @@
 
 <br>
 
-[📥 **Download Portable Executable (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.4/Craft.Agent.1.0.4.exe) &nbsp;•&nbsp; [💾 **Download Windows Installer (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.4/Craft.Agent.Setup.1.0.4.exe) &nbsp;•&nbsp; [🚀 **Latest Release (v1.0.4)**](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.4)
+[📥 **Download Portable Executable (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.5/Craft.Agent.1.0.5.exe) &nbsp;•&nbsp; [💾 **Download Windows Installer (.exe)**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.5/Craft.Agent.Setup.1.0.5.exe) &nbsp;•&nbsp; [🚀 **Latest Release (v1.0.5)**](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.5)
 
 </div>
 
@@ -30,12 +30,12 @@ Whether you need to scaffold a Paper 1.20+ teleportation plugin, build productio
 
 ## 🚀 Instant Download (Ready-to-Use)
 
-No Node.js or development environment needed! Simply download the standalone Windows build from the [v1.0.4 Release](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.4):
+No Node.js or development environment needed! Simply download the standalone Windows build from the [v1.0.5 Release](https://github.com/jipanjiji/CraftAgent/releases/tag/v1.0.5):
 
 | Package Type | File Name | Description |
 | :--- | :--- | :--- |
-| **⭐ Portable Executable** | [**`Craft.Agent.1.0.4.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.4/Craft.Agent.1.0.4.exe) | **Zero installation required.** Double-click to run immediately anywhere (USB, Google Drive, Desktop). |
-| **Windows Installer** | [**`Craft.Agent.Setup.1.0.4.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.4/Craft.Agent.Setup.1.0.4.exe) | Complete setup wizard with Desktop shortcuts and Start Menu integration. |
+| **⭐ Portable Executable** | [**`Craft.Agent.1.0.5.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.5/Craft.Agent.1.0.5.exe) | **Zero installation required.** Double-click to run immediately anywhere (USB, Google Drive, Desktop). |
+| **Windows Installer** | [**`Craft.Agent.Setup.1.0.5.exe`**](https://github.com/jipanjiji/CraftAgent/releases/download/v1.0.5/Craft.Agent.Setup.1.0.5.exe) | Complete setup wizard with Desktop shortcuts and Start Menu integration. |
 
 ---
 
@@ -79,10 +79,20 @@ No Node.js or development environment needed! Simply download the standalone Win
 - Strict 15-message token sliding window to preserve memory and context integrity across long sessions.
 - `.jar` artifacts in `build/libs/` are automatically kept visible for instant verification.
 
+### 📦 Modrinth Content Hub & Smart Downloader (v1.0.5)
+- Search and explore mods, plugins, datapacks, resource packs, shaders, and modpacks directly inside the app.
+- Filter by loaders (Paper, Spigot, Fabric, Forge, NeoForge, Quilt, etc.) and Minecraft versions.
+- Official release download modal with automated dependency resolution: single-click installation with dependencies directly into your workspace (`plugins/` or `mods/`).
+- One-click **AI Deep Audit**: Instantly audits any selected mod/plugin for security vulnerabilities, configuration options, server impact, and Folia/TPS performance.
+
+### 🔍 Interactive Visual Diff Preview (v1.0.5)
+- Color-coded unified and split line-by-line diff engine.
+- Instant visual verification of file modifications (`patch_file` / `write_file`) before and after execution.
+
 ### 🎨 Obsidian Minimalist Interface
 - Carefully calibrated `#181818` dark theme with high-contrast `#303034` inline code pills.
 - Chronological step accordions: expandable `Worked for...` sections keeping your workspace tidy.
-- Live streaming output, copy-to-clipboard buttons, and responsive split-view console log.
+- Live streaming output, copy-to-clipboard buttons, clean SVG iconography, quota usage tracker, and responsive chat column alignment.
 
 ---
 

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { DiffEngine } = require('../diff-engine');
 
 class FileManager {
   constructor(workspaceRoot = null, maxReadSize = 512000) {
@@ -162,6 +163,16 @@ class FileManager {
       const fullPath = await this.resolvePathWithApproval(relativePath, 'write_file');
       const parentDir = path.dirname(fullPath);
 
+      const isExisting = fs.existsSync(fullPath);
+      let originalContent = '';
+      if (isExisting) {
+        try {
+          originalContent = fs.readFileSync(fullPath, 'utf8');
+        } catch (e) {
+          originalContent = '';
+        }
+      }
+
       if (!fs.existsSync(parentDir)) {
         fs.mkdirSync(parentDir, { recursive: true });
       }
@@ -172,10 +183,14 @@ class FileManager {
         ? path.relative(this.workspaceRoot, fullPath)
         : fullPath;
 
+      const diffData = DiffEngine.generateDiff(originalContent, content, displayPath);
+
       return {
         success: true,
         path: displayPath,
         bytesWritten: stat.size,
+        isNewFile: !isExisting,
+        diffData,
         message: `Successfully wrote ${stat.size} bytes to ${displayPath}`
       };
     } catch (err) {
@@ -210,9 +225,11 @@ class FileManager {
       if (original.includes(searchBlock)) {
         const updated = original.replace(searchBlock, replaceBlock);
         fs.writeFileSync(fullPath, updated, 'utf8');
+        const diffData = DiffEngine.generateDiff(original, updated, displayPath);
         return {
           success: true,
           path: displayPath,
+          diffData,
           message: `Successfully patched ${displayPath}`
         };
       }
@@ -231,9 +248,11 @@ class FileManager {
           updated = updated.replace(/\n/g, '\r\n');
         }
         fs.writeFileSync(fullPath, updated, 'utf8');
+        const diffData = DiffEngine.generateDiff(original, updated, displayPath);
         return {
           success: true,
           path: displayPath,
+          diffData,
           message: `Successfully patched ${displayPath} (normalized line endings)`
         };
       }
@@ -248,8 +267,8 @@ class FileManager {
         let matchStartIndex = -1;
         for (let i = 0; i <= origLines.length - searchLines.length; i++) {
           let allMatch = true;
-          for (let k = 0; k < searchLines.length; k++) {
-            if (origLines[i + k].trim() !== searchLines[k].trim()) {
+          for (let j = 0; j < searchLines.length; j++) {
+            if (origLines[i + j].trim() !== searchLines[j].trim()) {
               allMatch = false;
               break;
             }
@@ -261,17 +280,19 @@ class FileManager {
         }
 
         if (matchStartIndex !== -1) {
-          const origIndent = origLines[matchStartIndex].match(/^\s*/)[0];
-          const searchIndent = searchLines[0].match(/^\s*/)[0];
-          const replaceLines = normReplace.split('\n');
+          const matchedTargetLine = origLines[matchStartIndex];
+          const matchedIndent = matchedTargetLine.match(/^(\s*)/)[1];
+          const searchFirstIndent = searchLines[0].match(/^(\s*)/)[1];
 
+          const replaceLines = normReplace.split('\n');
           const adjustedReplaceLines = replaceLines.map(line => {
-            if (searchIndent && line.startsWith(searchIndent)) {
-              return origIndent + line.slice(searchIndent.length);
-            } else if (!line.startsWith(origIndent) && line.trim().length > 0) {
-              return origIndent + line.trimStart();
+            if (line.trim().length === 0) return '';
+            const lineIndent = line.match(/^(\s*)/)[1];
+            if (lineIndent.startsWith(searchFirstIndent)) {
+              const relativeIndent = lineIndent.slice(searchFirstIndent.length);
+              return matchedIndent + relativeIndent + line.trim();
             }
-            return line;
+            return matchedIndent + line.trim();
           });
 
           const newOrigLines = [
@@ -285,9 +306,11 @@ class FileManager {
             updated = updated.replace(/\n/g, '\r\n');
           }
           fs.writeFileSync(fullPath, updated, 'utf8');
+          const diffData = DiffEngine.generateDiff(original, updated, displayPath);
           return {
             success: true,
             path: displayPath,
+            diffData,
             message: `Successfully patched ${displayPath} (fuzzy whitespace & indentation match)`
           };
         }

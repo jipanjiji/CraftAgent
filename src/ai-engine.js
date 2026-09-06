@@ -447,7 +447,7 @@ class AIEngine {
     // Check API Key
     const config = this.configManager.getConfig();
     if (!config.api.apiKey || config.api.apiKey.trim() === '') {
-      const err = new Error("xKiro API Key is missing. Please open Settings (⚙) and enter your API Key.");
+      const err = new Error("xKiro API Key is missing. Please open Settings and enter your API Key.");
       if (onError) onError(err.message);
       return;
     }

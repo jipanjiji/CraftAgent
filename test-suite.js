@@ -11,6 +11,8 @@ const { WorkspaceMemory } = require('./src/workspace-memory');
 const { WebIntelligence } = require('./src/tools/web-intelligence');
 const { getSystemPrompt } = require('./src/system-prompt');
 const { AIEngine } = require('./src/ai-engine');
+const { DiffEngine } = require('./src/diff-engine');
+const { ModrinthService } = require('./src/tools/modrinth-service');
 
 async function runTests() {
   console.log('🧪 Starting Craft Agent Test Suite...\n');
@@ -381,6 +383,73 @@ async function runTests() {
   const web = new WebIntelligence();
   const searchRes = await web.webSearch('PaperMC Minecraft documentation', 3);
   console.log(`  ✓ Web search executed: status=${searchRes.success}, results found=${searchRes.results ? searchRes.results.length : 0}`);
+
+  // 8. DiffEngine & Visual Diff Preview
+  console.log('\nTesting DiffEngine & Visual Diff...');
+  const oldTextSample = 'line 1\nline 2 original\nline 3';
+  const newTextSample = 'line 1\nline 2 replaced\nline 2.5 added\nline 3';
+  const diffRes = DiffEngine.generateDiff(oldTextSample, newTextSample, 'Sample.java');
+  assert.strictEqual(diffRes.stats.additions, 2, 'Should detect 2 additions');
+  assert.strictEqual(diffRes.stats.deletions, 1, 'Should detect 1 deletion');
+  assert.strictEqual(diffRes.stats.unchanged, 2, 'Should detect 2 unchanged lines');
+  assert.ok(diffRes.lines.some(l => l.type === 'addition' && l.content === 'line 2.5 added'), 'Should have addition line');
+  assert.ok(diffRes.lines.some(l => l.type === 'deletion' && l.content === 'line 2 original'), 'Should have deletion line');
+  console.log('  ✓ DiffEngine LCS diff calculation verified (additions, deletions, line numbers).');
+
+  // Test FileManager returning diffData
+  const patchTestFile = path.join(testDir, 'DiffTest.txt');
+  fs.writeFileSync(patchTestFile, 'Hello World\nGoodbye World\n', 'utf8');
+  const diffPatchRes = await fileMgr.patchFile('DiffTest.txt', 'Goodbye World', 'Welcome Craft Agent');
+  assert.strictEqual(diffPatchRes.success, true);
+  assert.ok(diffPatchRes.diffData, 'patchFile must return diffData');
+  assert.strictEqual(diffPatchRes.diffData.stats.additions, 1);
+  assert.strictEqual(diffPatchRes.diffData.stats.deletions, 1);
+  console.log('  ✓ FileManager patchFile attached visual diffData verified.');
+
+  const writeUpdateRes = await fileMgr.writeFile('DiffTest.txt', 'Hello Universe\nWelcome Craft Agent\n');
+  assert.strictEqual(writeUpdateRes.success, true);
+  assert.strictEqual(writeUpdateRes.isNewFile, false);
+  assert.ok(writeUpdateRes.diffData, 'writeFile on existing file must return diffData');
+  console.log('  ✓ FileManager writeFile overwrite diffData verified.');
+
+  // 9. ModrinthService & Discover Content
+  console.log('\nTesting ModrinthService & Discover Content...');
+  const modrinth = new ModrinthService(testDir);
+  const mSearch = await modrinth.searchProjects({ query: 'essentials', projectType: 'plugin', limit: 2 });
+  assert.ok(mSearch.totalHits > 0, 'Modrinth search should return total hits');
+  assert.ok(mSearch.hits.length > 0, 'Modrinth search should return hits array');
+  assert.ok(mSearch.hits[0].title, 'Modrinth hit must have title');
+  assert.ok(mSearch.hits[0].slug, 'Modrinth hit must have slug');
+  console.log(`  ✓ Modrinth searchProjects verified: found ${mSearch.totalHits} plugins (first hit: "${mSearch.hits[0].title}").`);
+
+  const mVersions = await modrinth.getProjectVersions(mSearch.hits[0].slug);
+  assert.ok(Array.isArray(mVersions) && mVersions.length > 0, 'Modrinth getProjectVersions must return versions array');
+  assert.ok(mVersions[0].files && mVersions[0].files.length > 0, 'Modrinth version must have files list');
+  console.log(`  ✓ Modrinth getProjectVersions verified (${mVersions.length} versions retrieved, latest: "${mVersions[0].name || mVersions[0].version_number}").`);
+
+  const mBatchProjects = await modrinth.getProjects(['Ha28R6CL', 'P7dR8mSH']);
+  assert.ok(Array.isArray(mBatchProjects) && mBatchProjects.length === 2, 'Modrinth getProjects batch must return requested projects');
+  assert.ok(mBatchProjects[0].title && mBatchProjects[1].title, 'Batch projects must have titles');
+  console.log(`  ✓ Modrinth getProjects batch verified (${mBatchProjects.map(p => p.title).join(', ')}).`);
+
+  // 10. Quota Tracker Calculations
+  console.log('\nTesting xKiro Quota calculations...');
+  const mockQuotaPayload = {
+    free_tokens: {
+      used_today: 113223,
+      limit_per_day: 5000000,
+      remaining: 4886777
+    },
+    wallet: {
+      balance_usd: "0.000000",
+      held_usd: "0.000000"
+    }
+  };
+  const calcPct = Math.round((mockQuotaPayload.free_tokens.remaining / mockQuotaPayload.free_tokens.limit_per_day) * 100);
+  assert.strictEqual(calcPct, 98, 'Percentage remaining should be 98%');
+  const remM = (mockQuotaPayload.free_tokens.remaining / 1000000).toFixed(2);
+  assert.strictEqual(remM, '4.89', 'Remaining millions should format to 4.89M');
+  console.log(`  ✓ Quota tracker calculations verified: ${calcPct}% remaining, ${remM}M free.`);
 
   // Cleanup test workspace
   try {

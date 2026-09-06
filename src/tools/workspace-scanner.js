@@ -192,11 +192,11 @@ class WorkspaceScanner {
         const childPrefix = prefix + (isLast ? '    ' : '│   ');
 
         if (entry.isDirectory()) {
-          lines.push(`${prefix}${branch}📁 ${entry.name}/`);
+          lines.push(`${prefix}${branch}${entry.name}/`);
           const subLines = buildTree(fullPath, depth + 1, childPrefix);
           lines.push(...subLines);
         } else {
-          lines.push(`${prefix}${branch}📄 ${entry.name}`);
+          lines.push(`${prefix}${branch}${entry.name}`);
         }
       }
 
@@ -204,7 +204,7 @@ class WorkspaceScanner {
     };
 
     const rootName = path.basename(scanDir) || 'root';
-    const lines = [`📁 ${rootName}/`];
+    const lines = [`${rootName}/`];
     lines.push(...buildTree(scanDir, 1, ''));
 
     if (truncated) {
