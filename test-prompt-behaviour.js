@@ -117,6 +117,7 @@ async function runScenario(client, workspacePath, scenario) {
     const results = [];
 
     for (let i = 0; i < RUNS_PER_SCENARIO; i++) {
+        const t0 = Date.now();
         try {
             const response = await client.chat.completions.create({
                 model: MODEL,
@@ -128,18 +129,21 @@ async function runScenario(client, workspacePath, scenario) {
                 tool_choice: 'auto',
                 max_tokens: 1000
             });
+            const durationMs = Date.now() - t0;
 
             const message = response.choices[0].message;
             const toolCalls = message.tool_calls || [];
+            const text = message.content || message.reasoning_content || '';
 
             results.push({
                 run: i + 1,
+                durationMs,
                 toolCallNames: toolCalls.map(tc => tc.function.name),
-                textContent: message.content || '',
+                textContent: text,
                 rawToolCalls: toolCalls
             });
         } catch (err) {
-            results.push({ run: i + 1, error: err.message });
+            results.push({ run: i + 1, durationMs: Date.now() - t0, error: err.message });
         }
     }
 
@@ -147,11 +151,35 @@ async function runScenario(client, workspacePath, scenario) {
 }
 
 function evaluateScenario(scenario, results) {
+    // Tampilkan detail respon asli dari model live di setiap run
+    results.forEach(r => {
+        if (r.error) {
+            console.log(`     • Run ${r.run} (${r.durationMs}ms) ❌ ERROR: ${r.error}`);
+            return;
+        }
+
+        const formattedToolCalls = (r.rawToolCalls || []).map(tc => {
+            let args = tc.function.arguments || '{}';
+            args = args.replace(/\s+/g, ' ');
+            return `${tc.function.name}(${args})`;
+        });
+
+        console.log(`     • Run ${r.run} (${r.durationMs}ms):`);
+        if (formattedToolCalls.length > 0) {
+            console.log(`       🛠️  Tool Dipanggil : ${formattedToolCalls.join(', ')}`);
+        } else {
+            console.log(`       🚫  Tool Dipanggil : (TIDAK ADA - Gate Menahan Pemanggilan Tool)`);
+        }
+
+        if (r.textContent && r.textContent.trim()) {
+            const cleanText = r.textContent.trim().replace(/\r?\n+/g, ' ');
+            const preview = cleanText.length > 200 ? cleanText.slice(0, 200) + '...' : cleanText;
+            console.log(`       💬  Jawaban Teks AI : "${preview}"`);
+        }
+    });
+
     if (scenario.observationOnly) {
         console.log(`  📋 OBSERVATION (${scenario.id}): tidak dievaluasi pass/fail otomatis.`);
-        results.forEach(r => {
-            console.log(`     Run ${r.run}: tool_calls=[${(r.toolCallNames || []).join(', ')}] | text preview: "${(r.textContent || '').slice(0, 80)}..."`);
-        });
         return { status: 'observed', passRate: null };
     }
 
