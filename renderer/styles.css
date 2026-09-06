@@ -394,6 +394,38 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
+}
+
+/* Floating Scroll-to-Bottom Button */
+.btn-scroll-bottom {
+  position: absolute;
+  bottom: 112px;
+  right: 28px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-medium);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+  z-index: 25;
+  animation: fadeIn 0.2s ease;
+}
+
+.btn-scroll-bottom:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.btn-scroll-bottom svg {
+  stroke: var(--text-primary);
 }
 
 .panel-console {
@@ -1449,9 +1481,53 @@ body {
   white-space: pre-wrap;
 }
 
+/* Danger Banner for Destructive Operations */
+.cmd-danger-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  color: var(--danger);
+  animation: pulseWarning 2.2s infinite ease-in-out;
+}
+
+.cmd-danger-banner svg {
+  flex-shrink: 0;
+  stroke: var(--danger);
+}
+
+.cmd-danger-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cmd-danger-content strong {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #f87171;
+}
+
+.cmd-danger-content span {
+  color: #fca5a5;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+@keyframes pulseWarning {
+  0%, 100% { box-shadow: 0 0 0 rgba(239, 68, 68, 0); }
+  50% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.35); }
+}
+
 .modal-subtext {
   font-size: 12px;
   color: var(--text-muted);
+  line-height: 1.45;
 }
 
 .modal-actions {

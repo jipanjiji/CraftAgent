@@ -100,7 +100,7 @@ const TOOLS_SCHEMA = [
           },
           search_block: {
             type: "string",
-            description: "The exact block of lines to find in the file (must match verbatim including indentation)"
+            description: "The block of lines to find in the file (matches verbatim or whitespace/indentation variations automatically)"
           },
           replace_block: {
             type: "string",
@@ -243,6 +243,65 @@ function formatToolStatusDescription(name, args) {
   }
 }
 
+const READ_ONLY_TOOLS = new Set([
+  'read_file',
+  'inspect_jar',
+  'get_workspace_structure',
+  'web_search',
+  'scrape_webpage'
+]);
+
+/**
+ * Hybrid Two-Tier Transient Error Detector (Item 7):
+ * Layer 1: Structured fields inspection (status, code, name, type)
+ * Layer 2: Resilient string matching fallback (for multi-provider gateways like xKiro)
+ */
+function isTransientError(err) {
+  if (!err) return false;
+
+  // Layer 1: Structured fields
+  const status = err.status || err.statusCode || err.response?.status;
+  const code = err.code || err.error?.code;
+  const name = err.name;
+
+  // Explicit non-transient errors (never retry)
+  if (status === 401 || status === 403 || status === 404 || name === 'AuthenticationError' || name === 'NotFoundError') {
+    return false;
+  }
+  if (name === 'AbortError' || name === 'APIUserAbortError') {
+    return false;
+  }
+
+  // Structured transient indicators
+  if (status === 429 || (status >= 500 && status <= 504)) {
+    return true;
+  }
+  if (code === 'ERR_STREAM_PREMATURE_CLOSE' || code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ENOTFOUND' || code === 'ESOCKETTIMEDOUT') {
+    return true;
+  }
+  if (name === 'RateLimitError' || name === 'InternalServerError' || name === 'APIConnectionError' || name === 'APIConnectionTimeoutError') {
+    return true;
+  }
+
+  // Layer 2: String fallback inspection
+  const errMsg = ((err.message || '') + ' ' + (err.stack || '')).toLowerCase();
+
+  if (errMsg.includes('invalid api key') || errMsg.includes('unauthorized') || errMsg.includes('model not found')) {
+    return false;
+  }
+
+  return errMsg.includes('rate limit') ||
+         errMsg.includes('too many requests') ||
+         errMsg.includes('premature close') ||
+         errMsg.includes('socket hang up') ||
+         errMsg.includes('econnreset') ||
+         errMsg.includes('etimedout') ||
+         errMsg.includes('gateway timeout') ||
+         errMsg.includes('bad gateway') ||
+         errMsg.includes('internal server error') ||
+         /\b(429|500|502|503|504)\b/.test(errMsg);
+}
+
 class AIEngine {
   constructor({ configManager, historyManager, fileManager, terminalExecutor, workspaceScanner, webIntelligence, archiveInspector = null }) {
     this.configManager = configManager;
@@ -290,6 +349,32 @@ class AIEngine {
       }
     }
     this.terminalExecutor.cancelAll();
+  }
+
+  /**
+   * Abort-aware sleep helper: resolves immediately if user aborts during waiting delay.
+   */
+  async abortableSleep(ms) {
+    if (this.isAborted) return;
+    return new Promise((resolve) => {
+      const signal = this.currentAbortController?.signal;
+      if (signal?.aborted) return resolve();
+
+      let timer = null;
+      const onAbort = () => {
+        if (timer) clearTimeout(timer);
+        resolve();
+      };
+
+      if (signal) {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+
+      timer = setTimeout(() => {
+        if (signal) signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
+    });
   }
 
   /**
@@ -355,7 +440,7 @@ class AIEngine {
   /**
    * Main chat loop: handles streaming text, tool calling resolution, and recursing until completion.
    */
-  async chat({ userMessage, attachments = [], onChunk, onToolStart, onToolComplete, onStatus, onError, onFinish }) {
+  async chat({ userMessage, attachments = [], options = {}, onChunk, onToolStart, onToolComplete, onStatus, onError, onFinish }) {
     this.isAborted = false;
     this.currentAbortController = new AbortController();
 
@@ -414,7 +499,7 @@ class AIEngine {
 
     let loopIterations = 0;
     let autoContinueCount = 0;
-    const maxIterations = 20; // safety ceiling
+    const maxIterations = (options && options.maxIterations) || (config.agent && config.agent.maxIterations) || 30;
 
     try {
       while (loopIterations < maxIterations) {
@@ -424,34 +509,64 @@ class AIEngine {
         }
 
         loopIterations++;
+        if (loopIterations === maxIterations - 4) {
+          if (onStatus) onStatus(`Peringatan: Pengerjaan telah mencapai putaran ${loopIterations}/${maxIterations}. Bersiap merangkum hasil...`);
+        }
+
         const messages = this.historyManager.getMessagesForAPI(systemPrompt);
 
-        let stream;
-        try {
-          stream = await client.chat.completions.create({
-            model: model,
-            messages: messages,
-            tools: TOOLS_SCHEMA,
-            tool_choice: "auto",
-            stream: true
-          }, {
-            signal: this.currentAbortController.signal
-          });
-        } catch (apiErr) {
-          if (this.isAborted || apiErr.name === 'AbortError' || apiErr.name === 'APIUserAbortError') {
-            console.log("xKiro request aborted by user.");
-            if (onFinish) onFinish({ text: '', aborted: true });
+        // Initial API Call with Exponential Backoff Retry (Item 1 & Item 7)
+        let stream = null;
+        let apiAttempts = 0;
+        const maxApiAttempts = 3;
+
+        while (apiAttempts < maxApiAttempts) {
+          apiAttempts++;
+          try {
+            stream = await client.chat.completions.create({
+              model: model,
+              messages: messages,
+              tools: TOOLS_SCHEMA,
+              tool_choice: "auto",
+              stream: true
+            }, {
+              signal: this.currentAbortController.signal
+            });
+            break; // Request succeeded!
+          } catch (apiErr) {
+            if (this.isAborted || apiErr.name === 'AbortError' || apiErr.name === 'APIUserAbortError') {
+              console.log("xKiro request aborted by user.");
+              if (onFinish) onFinish({ text: '', aborted: true });
+              return;
+            }
+
+            const transient = isTransientError(apiErr);
+            if (transient && apiAttempts < maxApiAttempts && !this.isAborted) {
+              const delay = Math.min(4000, 1000 * Math.pow(2, apiAttempts - 1)) + Math.floor(Math.random() * 400);
+              const statusReason = apiErr.status || apiErr.code || 'rate limit / server busy';
+              console.warn(`Transient API error (${statusReason}). Retrying in ${delay}ms (attempt ${apiAttempts}/${maxApiAttempts})...`);
+              if (onStatus) {
+                onStatus(`Koneksi terganggu / rate limit (${statusReason}). Mencoba ulang dalam ${(delay / 1000).toFixed(1)}s (percobaan ${apiAttempts}/${maxApiAttempts})...`);
+              }
+              await this.abortableSleep(delay);
+              if (this.isAborted) {
+                console.log("xKiro request aborted by user during retry backoff delay.");
+                if (onFinish) onFinish({ text: '', aborted: true });
+                return;
+              }
+              continue;
+            }
+
+            console.error("xKiro API Error:", apiErr);
+            let userMsg = apiErr.message;
+            if (apiErr.status === 401 || /(unauthorized|invalid api key)/i.test(apiErr.message)) {
+              userMsg = "Unauthorized (401): Invalid xKiro API Key. Check your settings.";
+            } else if (apiErr.status === 404 || /model not found/i.test(apiErr.message)) {
+              userMsg = `Model '${model}' not found on xKiro. Please select a valid model in Settings.`;
+            }
+            if (onError) onError(userMsg);
             return;
           }
-          console.error("xKiro API Error:", apiErr);
-          let userMsg = apiErr.message;
-          if (apiErr.status === 401) {
-            userMsg = "Unauthorized (401): Invalid xKiro API Key. Check your settings.";
-          } else if (apiErr.status === 404) {
-            userMsg = `Model '${model}' not found on xKiro. Please select a valid model in Settings.`;
-          }
-          if (onError) onError(userMsg);
-          return;
         }
 
         let fullTextContent = '';
@@ -503,11 +618,7 @@ class AIEngine {
           }
         } catch (streamErr) {
           console.warn("AI Engine stream interrupted:", streamErr);
-          const errMsg = (streamErr.message || '').toLowerCase();
-          const isNetworkDrop = errMsg.includes('premature close') || 
-                                errMsg.includes('econnreset') || 
-                                errMsg.includes('socket hang up') || 
-                                errMsg.includes('etimedout');
+          const isNetworkDrop = isTransientError(streamErr);
 
           if (isNetworkDrop && !this.isAborted) {
             // If the model had already streamed significant content to the user, preserve it gracefully
@@ -522,12 +633,18 @@ class AIEngine {
               });
               if (onFinish) onFinish({ text: fullTextContent });
               return;
-            } else if (loopIterations === 1 && autoContinueCount === 0) {
+            } else if (loopIterations <= 2 && autoContinueCount === 0) {
               // Retry once for transient initial drop
-              console.log("Transient stream drop on iteration 1, retrying once...");
+              console.log("Transient stream drop, retrying iteration...");
               autoContinueCount++;
               loopIterations--;
-              await new Promise(r => setTimeout(r, 1200));
+              if (onStatus) onStatus("Streaming terputus sejenak, mencoba menyambung kembali...");
+              await this.abortableSleep(1200);
+              if (this.isAborted) {
+                console.log("xKiro request aborted by user during stream drop retry.");
+                if (onFinish) onFinish({ text: fullTextContent, aborted: true });
+                return;
+              }
               continue;
             }
           }
@@ -554,7 +671,7 @@ class AIEngine {
         const validToolCalls = toolCallsAccumulator.filter(tc => tc && tc.function && tc.function.name);
 
         if (validToolCalls.length === 0) {
-          // 1. If model returned empty content and no tool calls (typical of reasoning models finishing internal thoughts):
+          // 1. If model returned empty content and no tool calls:
           if (!fullTextContent.trim() && loopIterations < 3 && autoContinueCount === 0) {
             autoContinueCount++;
             this.historyManager.addMessage({
@@ -564,8 +681,7 @@ class AIEngine {
             continue;
           }
 
-          // 2. If the model gave an explanation promising execution (e.g. "Tunggu sebentar", "Saya akan perbaiki", "lalu jalankan build", etc.)
-          // but forgot to attach the tool calls in this turn, nudge it to continue autonomously without stopping!
+          // 2. If the model gave an explanation promising execution but forgot to attach tool calls:
           const isPromiseToExecute = /(tunggu sebentar|tunggu sejenak|sebentar ya|wait a moment|one moment|hang on|langsung saya (eksekusi|perbaiki|buat|kerjakan)|akan saya (eksekusi|perbaiki|ubah|ganti|edit|update|jalankan|build|buat|bikin|kerjakan)|saya akan (perbaiki|ubah|ganti|edit|update|benahi|jalankan|build|kompilasi|buat|bikin|buatkan|eksekusi|lanjutkan|mulai|tulis|selesaikan)|lalu jalankan (build|kompilasi|perintah|command)|sedang saya (perbaiki|proses|kerjakan|buat)|mari saya (perbaiki|ubah|buat|jalankan)|i will (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make|implement|proceed)|let me (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make)|i'll (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make))/i.test(fullTextContent);
 
           if (isPromiseToExecute && loopIterations < 5 && autoContinueCount < 2) {
@@ -583,7 +699,7 @@ class AIEngine {
             continue;
           }
 
-          // 3. Fallback: If fullTextContent is still empty, provide friendly response instead of blank card
+          // 3. Fallback: If fullTextContent is still empty:
           if (!fullTextContent.trim()) {
             fullTextContent = 'Saya siap membantu. Silakan beri tahu file apa yang ingin diperiksa atau fitur apa yang ingin dibuat.';
             if (onChunk) onChunk(fullTextContent);
@@ -601,7 +717,6 @@ class AIEngine {
         }
 
         // Model requested tool calls
-        // Record assistant message with tool_calls in history
         this.historyManager.addMessage({
           role: 'assistant',
           content: fullTextContent || null,
@@ -612,10 +727,8 @@ class AIEngine {
           onStatus(`Executing ${validToolCalls.length} tool request(s)...`);
         }
 
-        // Execute each tool call sequentially
-        for (const tc of validToolCalls) {
-          if (this.isAborted) break;
-
+        // Helper to execute single tool call and trigger memory sniffing
+        const executeSingleTool = async (tc) => {
           const funcName = tc.function.name;
           let parsedArgs = {};
           try {
@@ -626,9 +739,7 @@ class AIEngine {
           }
 
           const statusDesc = formatToolStatusDescription(funcName, parsedArgs);
-          if (onStatus) {
-            onStatus(statusDesc);
-          }
+          if (onStatus) onStatus(statusDesc);
 
           if (onToolStart) {
             onToolStart({
@@ -658,27 +769,83 @@ class AIEngine {
             });
           }
 
-          // Push tool response message to history with head-tail pruning (Feature 1)
-          const rawToolJson = JSON.stringify(toolResult);
-          const prunedToolJson = pruneToolContent(rawToolJson);
-          this.historyManager.addMessage({
-            role: 'tool',
-            tool_call_id: tc.id,
-            name: funcName,
-            content: prunedToolJson
-          });
+          // Sniff project context & milestones (Item 6)
+          this.sniffAndCaptureMemory(funcName, parsedArgs, toolResult);
+
+          return {
+            tc,
+            funcName,
+            toolResult
+          };
+        };
+
+        // Chunk validToolCalls into consecutive runs of read-only vs mutating
+        // (PRESERVES original relative order across chunks!)
+        const chunks = [];
+        let currentChunk = [];
+        let currentIsReadOnly = null;
+
+        for (const tc of validToolCalls) {
+          const isReadOnly = READ_ONLY_TOOLS.has(tc.function.name);
+          if (currentIsReadOnly === null) {
+            currentIsReadOnly = isReadOnly;
+            currentChunk.push(tc);
+          } else if (currentIsReadOnly && isReadOnly) {
+            currentChunk.push(tc);
+          } else {
+            chunks.push({ isReadOnly: currentIsReadOnly, items: currentChunk });
+            currentChunk = [tc];
+            currentIsReadOnly = isReadOnly;
+          }
+        }
+        if (currentChunk.length > 0) {
+          chunks.push({ isReadOnly: currentIsReadOnly, items: currentChunk });
+        }
+
+        // Execute chunks in strict sequence to preserve model's intended causality
+        for (const chunk of chunks) {
+          if (this.isAborted) break;
+
+          let chunkResults = [];
+          if (chunk.isReadOnly && chunk.items.length > 1) {
+            // Parallel concurrent execution for contiguous read-only tools
+            chunkResults = await Promise.all(chunk.items.map(tc => executeSingleTool(tc)));
+          } else {
+            // Sequential execution for mutating tools or single items
+            for (const tc of chunk.items) {
+              if (this.isAborted) break;
+              const res = await executeSingleTool(tc);
+              chunkResults.push(res);
+            }
+          }
+
+          // Push tool response messages to history in exact original order
+          for (const r of chunkResults) {
+            const rawToolJson = JSON.stringify(r.toolResult);
+            const prunedToolJson = pruneToolContent(rawToolJson);
+            this.historyManager.addMessage({
+              role: 'tool',
+              tool_call_id: r.tc.id,
+              name: r.funcName,
+              content: prunedToolJson
+            });
+          }
         }
 
         if (this.isAborted) {
           if (onFinish) onFinish({ text: fullTextContent, aborted: true });
           return;
         }
-
-        // Continue loop to give tool results back to model
       }
 
       if (loopIterations >= maxIterations) {
-        if (onError) onError("Tool execution loop limit reached (max 20 rounds). Stopping for safety.");
+        const limitNotice = `\n\n*(Batas pengerjaan otomatis tercapai: ${maxIterations} putaran. Ketik 'lanjut' untuk melanjutkan pengerjaan berikutnya.)*`;
+        if (onChunk) onChunk(limitNotice);
+        this.historyManager.addMessage({
+          role: 'assistant',
+          content: (fullTextContent || 'Pengerjaan putaran selesai.') + limitNotice
+        });
+        if (onFinish) onFinish({ text: (fullTextContent || '') + limitNotice });
       }
     } catch (err) {
       console.error("AI Engine error:", err);
@@ -734,6 +901,120 @@ class AIEngine {
           success: false,
           error: `Unknown tool name: ${name}`
         };
+    }
+  }
+
+  /**
+   * Autonomous Multi-Touchpoint Memory Sniffing (Item 6):
+   * Proactively captures project context, platforms, and completed milestones into .craft/memory.json
+   */
+  sniffAndCaptureMemory(funcName, parsedArgs, toolResult) {
+    if (!this.workspaceMemory || !toolResult || toolResult.success === false) return;
+
+    try {
+      // 1. Sniff on write_file or patch_file
+      if (funcName === 'write_file' || funcName === 'patch_file') {
+        const filePath = (parsedArgs.path || '').toLowerCase();
+        const content = parsedArgs.content || parsedArgs.replace_block || '';
+
+        // build.gradle / pom.xml
+        if (filePath.endsWith('build.gradle') || filePath.endsWith('build.gradle.kts') || filePath.endsWith('pom.xml')) {
+          const facts = {};
+          if (filePath.includes('gradle')) facts.buildTool = 'Gradle';
+          if (filePath.includes('pom.xml')) facts.buildTool = 'Maven';
+
+          // Sniff Java version
+          const javaMatch = content.match(/(?:sourceCompatibility|targetCompatibility)\s*=\s*['"]?(\d+)['"]?/i) ||
+                            content.match(/JavaLanguageVersion\.of\((\d+)\)/i) ||
+                            content.match(/<java\.version>(\d+)<\/java\.version>/i) ||
+                            content.match(/jvmTarget\s*=\s*['"]?(\d+)['"]?/i);
+          if (javaMatch) {
+            facts.javaVersion = `Java ${javaMatch[1]}`;
+          }
+
+          // Sniff server platform dependencies
+          if (/paper-api|io\.papermc\.paper/i.test(content)) {
+            facts.serverPlatform = 'Paper';
+          } else if (/purpur-api|org\.purpurmc\.purpur/i.test(content)) {
+            facts.serverPlatform = 'Purpur';
+          } else if (/spigot-api|org\.spigotmc/i.test(content)) {
+            facts.serverPlatform = 'Spigot';
+          } else if (/fabric-loader|net\.fabricmc/i.test(content)) {
+            facts.serverPlatform = 'Fabric';
+          }
+
+          if (Object.keys(facts).length > 0) {
+            this.workspaceMemory.update({ project_facts: facts });
+          }
+        }
+
+        // plugin.yml / paper-plugin.yml / fabric.mod.json
+        if (filePath.endsWith('plugin.yml') || filePath.endsWith('paper-plugin.yml') || filePath.endsWith('fabric.mod.json')) {
+          const facts = {};
+          const nameMatch = content.match(/^name:\s*['"]?([a-zA-Z0-9_-]+)['"]?/m) || content.match(/"id":\s*"([^"]+)"/);
+          if (nameMatch) facts.name = nameMatch[1];
+
+          const versionMatch = content.match(/^version:\s*['"]?([a-zA-Z0-9_.-]+)['"]?/m) || content.match(/"version":\s*"([^"]+)"/);
+          if (versionMatch) facts.version = versionMatch[1];
+
+          const mainMatch = content.match(/^main:\s*['"]?([a-zA-Z0-9_.]+)['"]?/m);
+          if (mainMatch) facts.mainClass = mainMatch[1];
+
+          const apiVerMatch = content.match(/^api-version:\s*['"]?([0-9.]+)['"]?/m);
+          if (apiVerMatch) facts.apiVersion = apiVerMatch[1];
+
+          if (Object.keys(facts).length > 0) {
+            this.workspaceMemory.update({ project_facts: facts });
+          }
+        }
+      }
+
+      // 2. Sniff on read_file (Server configs & platforms)
+      if (funcName === 'read_file') {
+        const filePath = (parsedArgs.path || '').toLowerCase();
+        const content = toolResult.content || '';
+
+        const facts = {};
+        if (filePath.endsWith('paper-global.yml') || filePath.endsWith('paper-world-defaults.yml')) {
+          facts.serverPlatform = 'Paper';
+        } else if (filePath.endsWith('purpur.yml')) {
+          facts.serverPlatform = 'Purpur';
+        } else if (filePath.endsWith('spigot.yml')) {
+          facts.serverPlatform = 'Spigot';
+        } else if (filePath.endsWith('velocity.toml') || filePath.endsWith('velocity-plugin.json')) {
+          facts.serverPlatform = 'Velocity';
+        } else if (filePath.endsWith('bungee.yml')) {
+          facts.serverPlatform = 'BungeeCord';
+        } else if (filePath.endsWith('server.properties')) {
+          const verMatch = content.match(/#Minecraft server properties\s+#([^\r\n]+)/i);
+          if (verMatch) facts.serverProperties = verMatch[1].trim();
+        }
+
+        if (Object.keys(facts).length > 0) {
+          this.workspaceMemory.update({ project_facts: facts });
+        }
+      }
+
+      // 3. Sniff on inspect_jar
+      if (funcName === 'inspect_jar' && toolResult.manifestData) {
+        const facts = {};
+        if (toolResult.manifestData.name) facts.name = toolResult.manifestData.name;
+        if (toolResult.manifestData.version) facts.version = toolResult.manifestData.version;
+        if (toolResult.manifestData.platform) facts.serverPlatform = toolResult.manifestData.platform;
+        if (Object.keys(facts).length > 0) {
+          this.workspaceMemory.update({ project_facts: facts });
+        }
+      }
+
+      // 4. Milestone Auto-Sync for successful build commands
+      if (funcName === 'execute_terminal_command' && toolResult.success) {
+        const cmd = (parsedArgs.command || '').toLowerCase();
+        if (cmd.includes('gradlew') && (cmd.includes('build') || cmd.includes('assemble'))) {
+          this.workspaceMemory.update({ completed_goals: ['Successfully built and compiled project with Gradle'] });
+        }
+      }
+    } catch (sniffErr) {
+      console.warn('Memory sniffing skipped on error:', sniffErr.message);
     }
   }
 }

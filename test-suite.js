@@ -5,11 +5,12 @@ const path = require('path');
 const { ConfigManager, MODELS_CATALOG } = require('./src/config-manager');
 const { FileManager } = require('./src/tools/file-manager');
 const { WorkspaceScanner } = require('./src/tools/workspace-scanner');
-const { TerminalExecutor } = require('./src/tools/terminal-executor');
+const { TerminalExecutor, isDestructiveCommand } = require('./src/tools/terminal-executor');
 const { HistoryManager, pruneToolContent, estimateTokens } = require('./src/history-manager');
 const { WorkspaceMemory } = require('./src/workspace-memory');
 const { WebIntelligence } = require('./src/tools/web-intelligence');
 const { getSystemPrompt } = require('./src/system-prompt');
+const { AIEngine } = require('./src/ai-engine');
 
 async function runTests() {
   console.log('🧪 Starting Craft Agent Test Suite...\n');
@@ -87,6 +88,30 @@ async function runTests() {
   assert.ok(verifyPatched.content.includes('getLogger().info("Craft Agent plugin enabled!");'));
   assert.ok(!verifyPatched.content.includes('System.out.println("Hello");'));
   console.log('  ✓ Patch file succeeded.');
+
+  // Test Fuzzy Whitespace & Indentation Patching (Level 3)
+  await fileMgr.writeFile('Indented.java', '    public void test() {\n        int a = 1;\n        int b = 2;\n    }\n');
+  const fuzzyPatchRes = await fileMgr.patchFile(
+    'Indented.java',
+    'public void test() {\n  int a = 1;\n  int b = 2;\n}',
+    'public void test() {\n  int a = 100;\n  int b = 200;\n}'
+  );
+  assert.strictEqual(fuzzyPatchRes.success, true, 'Fuzzy indentation patch must succeed');
+  const readFuzzy = await fileMgr.readFile('Indented.java');
+  assert.ok(readFuzzy.content.includes('int a = 100;'), 'Fuzzy patch must update content with matching indentation');
+  console.log('  ✓ Level 3 Fuzzy indentation matching succeeded for code files.');
+
+  // Test YAML Indentation Safety: level 3 fuzzy must be skipped for .yml to prevent hierarchy corruption
+  await fileMgr.writeFile('plugin.yml', 'name: MyPlugin\nversion: 1.0.0\nmain: com.craft.MyPlugin\n');
+  const yamlMismatchPatch = await fileMgr.patchFile(
+    'plugin.yml',
+    '  version: 1.0.0\n  main: com.craft.MyPlugin',
+    '  version: 2.0.0\n  main: com.craft.MyPlugin'
+  );
+  assert.strictEqual(yamlMismatchPatch.success, false, 'Fuzzy patch must be skipped for .yml files to preserve syntax');
+  assert.ok(yamlMismatchPatch.error.includes('YAML files (.yml/.yaml) are strictly indentation-sensitive'), 'Error must explain YAML indentation sensitivity');
+  assert.ok(yamlMismatchPatch.error.includes('Hint: Found closest similar code at line'), 'Diagnostic line hint must be provided');
+  console.log('  ✓ YAML indentation safety and diagnostic line hint verified.');
 
   // External path access approval testing
   const externalTestFile = path.join(__dirname, 'external_test_temp.txt');
@@ -184,6 +209,24 @@ async function runTests() {
   assert.ok(quickTimeoutExec.error.includes('timed out'));
   console.log('  ✓ AI-adjustable timeout parameter properly enforced.');
 
+  // Test Destructive Command Scanner & Confirmation Flag (Item 8)
+  assert.strictEqual(isDestructiveCommand('del /s /q test_dir').isDangerous, true, 'del /s /q must be detected as dangerous');
+  assert.strictEqual(isDestructiveCommand('git push origin main --force').isDangerous, true, 'git push --force must be detected');
+  assert.strictEqual(isDestructiveCommand('echo "test" && Remove-Item -Recurse -Force ./build').isDangerous, true, 'Chained dangerous command must be detected');
+  assert.strictEqual(isDestructiveCommand('format D:').isDangerous, true, 'format disk command must be detected');
+  assert.strictEqual(isDestructiveCommand('git reset --hard HEAD~1').isDangerous, true, 'git reset --hard must be detected');
+  assert.strictEqual(isDestructiveCommand('gradlew build --no-daemon').isDangerous, false, 'gradlew build must be recognized as safe');
+
+  // Verify dangerous flag is passed in confirm callback
+  let capturedDanger = null;
+  term.setConfirmCallback(async (req) => {
+    capturedDanger = req.isDangerous;
+    return false;
+  });
+  await term.executeCommand('rm -rf ./important_source');
+  assert.strictEqual(capturedDanger, true, 'req.isDangerous must be passed to terminal confirm modal');
+  console.log('  ✓ Destructive Command Scanner & Warning Badge integration verified.');
+
   // 6. Memory System Harness: Tool Pruning, Token Budgeting, Rolling Summarizer, and Workspace Memory
   console.log('\nTesting Memory System Harness...');
   
@@ -257,6 +300,81 @@ async function runTests() {
   assert.ok(memPrompt.includes('Paper 1.20.4'), 'Formatted prompt must include project facts');
   assert.ok(memPrompt.includes('Fix packet event optimizer'), 'Formatted prompt must include active goals');
   console.log('  ✓ Persistent workspace scratchpad (.craft/memory.json) (Feature 4) verified.');
+
+  // Test 6e: Multi-Touchpoint Autonomous Memory Sniffing (Item 6)
+  const aiEngine = new AIEngine({
+    configManager: cfgMgr,
+    historyManager: hist,
+    fileManager: fileMgr,
+    terminalExecutor: term,
+    workspaceScanner: new WorkspaceScanner(testDir),
+    webIntelligence: new WebIntelligence()
+  });
+  aiEngine.setWorkspaceRoot(testDir);
+
+  // Sniff 1: write build.gradle with Java 17 and paper-api
+  aiEngine.sniffAndCaptureMemory('write_file', {
+    path: 'build.gradle',
+    content: "sourceCompatibility = '17'\ndependencies {\n    compileOnly 'io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT'\n}"
+  }, { success: true });
+
+  assert.strictEqual(aiEngine.workspaceMemory.load().projectContext.javaVersion, 'Java 17', 'Java version must be sniffed from build.gradle');
+  assert.strictEqual(aiEngine.workspaceMemory.load().projectContext.serverPlatform, 'Paper', 'Server platform must be sniffed from build.gradle');
+  assert.strictEqual(aiEngine.workspaceMemory.load().projectContext.buildTool, 'Gradle', 'Build tool must be sniffed from build.gradle');
+
+  // Sniff 2: read purpur.yml
+  aiEngine.sniffAndCaptureMemory('read_file', { path: 'purpur.yml' }, { success: true, content: 'settings:\n  verbose: false' });
+  assert.strictEqual(aiEngine.workspaceMemory.load().projectContext.serverPlatform, 'Purpur', 'Server platform must update when purpur.yml is read');
+
+  // Sniff 3: write plugin.yml
+  aiEngine.sniffAndCaptureMemory('write_file', {
+    path: 'src/main/resources/plugin.yml',
+    content: 'name: SuperCraft\nversion: 3.2.1\nmain: com.craft.SuperCraft\napi-version: "1.20"'
+  }, { success: true });
+  assert.strictEqual(aiEngine.workspaceMemory.load().projectContext.name, 'SuperCraft', 'Plugin name must be sniffed');
+  assert.strictEqual(aiEngine.workspaceMemory.load().projectContext.version, '3.2.1', 'Plugin version must be sniffed');
+  assert.strictEqual(aiEngine.workspaceMemory.load().projectContext.mainClass, 'com.craft.SuperCraft', 'Plugin main class must be sniffed');
+  console.log('  ✓ Multi-touchpoint Autonomous Memory Sniffing (Item 6) verified across build files, configs, and plugins.');
+
+  // Test Composite Token Estimator (Item 4)
+  // Test Composite Token Estimator & BPE Benchmark Alignment (Item 4)
+  const codeSample = "package com.craft.test;\n\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic class TestPlugin extends JavaPlugin {\n    @Override\n    public void onEnable() {\n        getLogger().info(\"Enabled!\");\n    }\n}";
+  const jsonSample = '{"name": "CraftAgent", "version": "1.0.3", "active": true, "ports": [25565, 8080]}';
+  const indoSample = "Halo, tolong buatkan plugin Minecraft Paper 1.20.4 untuk mendeteksi auto-clicker.";
+
+  const codeEst = estimateTokens(codeSample);
+  const jsonEst = estimateTokens(jsonSample);
+  const indoEst = estimateTokens(indoSample);
+
+  // Benchmarked targets from OpenAI cl100k_base tokenizer:
+  // codeSample = 44 tokens, jsonSample = 23 tokens, indoSample = 24 tokens
+  const codeDiff = Math.abs(codeEst - 44) / 44;
+  const jsonDiff = Math.abs(jsonEst - 23) / 23;
+  const indoDiff = Math.abs(indoEst - 24) / 24;
+
+  assert.ok(codeDiff <= 0.10, `Code token estimate (${codeEst}) must be within 10% of BPE 44 (diff: ${(codeDiff * 100).toFixed(1)}%)`);
+  assert.ok(jsonDiff <= 0.10, `JSON token estimate (${jsonEst}) must be within 10% of BPE 23 (diff: ${(jsonDiff * 100).toFixed(1)}%)`);
+  assert.ok(indoDiff <= 0.10, `Indonesian token estimate (${indoEst}) must be within 10% of BPE 24 (diff: ${(indoDiff * 100).toFixed(1)}%)`);
+  console.log(`  ✓ Composite token estimator BPE benchmark verified: code=${codeEst} (bpe 44), json=${jsonEst} (bpe 23), indo=${indoEst} (bpe 24).`);
+
+  // Test Abortable Sleep Responsiveness during Retry Delay
+  const aiTest = new AIEngine({
+    configManager: cfgMgr,
+    historyManager: hist,
+    fileManager: fileMgr,
+    terminalExecutor: term,
+    workspaceScanner: new WorkspaceScanner(testDir),
+    webIntelligence: new WebIntelligence()
+  });
+  aiTest.currentAbortController = new AbortController();
+  const sleepStart = Date.now();
+  setTimeout(() => {
+    aiTest.abortCurrentRequest();
+  }, 100);
+  await aiTest.abortableSleep(5000);
+  const sleepDuration = Date.now() - sleepStart;
+  assert.ok(sleepDuration < 600, `Abortable sleep must wake up immediately on abort (took ${sleepDuration}ms instead of 5000ms)`);
+  console.log(`  ✓ Abortable sleep responsiveness verified: woke up in ${sleepDuration}ms (bypassed 5000ms delay immediately).`);
 
   // 7. WebIntelligence (DuckDuckGo search)
   console.log('\nTesting WebIntelligence...');

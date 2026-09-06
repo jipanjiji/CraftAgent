@@ -49,6 +49,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const confirmCwd = document.getElementById('confirmCwd');
   const confirmTimeout = document.getElementById('confirmTimeout');
   const confirmCountdown = document.getElementById('confirmCountdown');
+  const confirmDangerBanner = document.getElementById('confirmDangerBanner');
+  const confirmDangerText = document.getElementById('confirmDangerText');
   const btnApproveTerminal = document.getElementById('btnApproveTerminal');
   const btnDenyTerminal = document.getElementById('btnDenyTerminal');
 
@@ -847,7 +849,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `;
     chatMessages.appendChild(msgDiv);
-    scrollChatBottom();
+    scrollChatBottom(true);
   }
 
   function createAssistantMessage() {
@@ -870,7 +872,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
 
     chatMessages.appendChild(msgDiv);
-    scrollChatBottom();
+    scrollChatBottom(true);
 
     return {
       msgDiv: msgDiv,
@@ -892,11 +894,36 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `;
     chatMessages.appendChild(errDiv);
-    scrollChatBottom();
+    scrollChatBottom(true);
   }
 
-  function scrollChatBottom() {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+  // Smart Auto-Scroll: Detect when user deliberately scrolls up to read earlier text
+  let isUserScrolledUp = false;
+  const btnScrollBottom = document.getElementById('btnScrollBottom');
+
+  chatMessages.addEventListener('scroll', () => {
+    const distanceFromBottom = chatMessages.scrollHeight - chatMessages.clientHeight - chatMessages.scrollTop;
+    // Buffer of 80px
+    isUserScrolledUp = distanceFromBottom > 80;
+    if (btnScrollBottom) {
+      btnScrollBottom.style.display = isUserScrolledUp ? 'flex' : 'none';
+    }
+  });
+
+  if (btnScrollBottom) {
+    btnScrollBottom.addEventListener('click', () => {
+      scrollChatBottom(true);
+    });
+  }
+
+  function scrollChatBottom(force = false) {
+    if (force) {
+      isUserScrolledUp = false;
+      if (btnScrollBottom) btnScrollBottom.style.display = 'none';
+      chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
+    } else if (!isUserScrolledUp) {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
   }
 
   function formatDuration(totalSeconds) {
@@ -1202,16 +1229,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     activeTerminalRequestId = req.id;
 
     if (req.type === 'EXTERNAL_PATH') {
+      if (confirmDangerBanner) confirmDangerBanner.style.display = 'none';
       if (confirmModalTitle) confirmModalTitle.textContent = 'External Path Access Approval';
       if (confirmModalDesc) confirmModalDesc.textContent = `Craft Agent requests permission to ${req.action.replace('_', ' ')} on a file or folder outside your active workspace:`;
-      if (confirmModalSubtext) confirmModalSubtext.textContent = '⚠️ This file/folder is outside your active workspace. Only approve if you explicitly asked Craft Agent to access it.';
+      if (confirmModalSubtext) confirmModalSubtext.innerHTML = '⚠️ <strong>Visual Safety Aid:</strong> This file/folder is outside your active workspace. Only approve if you explicitly asked Craft Agent to access it.';
       confirmCommandText.textContent = req.path;
       confirmCwd.textContent = req.action.toUpperCase();
       confirmTimeout.textContent = req.description || 'External Path Access';
     } else {
       if (confirmModalTitle) confirmModalTitle.textContent = 'Terminal Command Approval';
       if (confirmModalDesc) confirmModalDesc.textContent = 'Craft Agent requests permission to execute the following shell command in your workspace directory:';
-      if (confirmModalSubtext) confirmModalSubtext.textContent = '⚠️ Only approve commands you trust. Execution runs on your local machine.';
+      
+      if (req.isDangerous) {
+        if (confirmDangerBanner) {
+          confirmDangerBanner.style.display = 'flex';
+          if (confirmDangerText) {
+            confirmDangerText.textContent = `Pattern: ${req.dangerReason || 'Destructive file, git, or system command'}`;
+          }
+        }
+        if (confirmModalSubtext) {
+          confirmModalSubtext.innerHTML = '⚠️ <strong>Visual Safety Aid:</strong> Destructive pattern detected. <em>Note: Regex pattern matching cannot detect every disguised script or alias.</em> Always review the command thoroughly before approving — execution runs with your local user permissions.';
+        }
+      } else {
+        if (confirmDangerBanner) confirmDangerBanner.style.display = 'none';
+        if (confirmModalSubtext) {
+          confirmModalSubtext.innerHTML = '⚠️ <strong>Visual Safety Aid:</strong> Only approve commands you recognize. Always review commands before approving — execution runs with your local user permissions.';
+        }
+      }
+
       confirmCommandText.textContent = req.command;
       confirmCwd.textContent = req.workingDir || 'Workspace Root';
       confirmTimeout.textContent = `Timeout: ${req.timeoutSeconds || 60}s`;
@@ -1236,6 +1281,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (confirmTimerInterval) {
       clearInterval(confirmTimerInterval);
       confirmTimerInterval = null;
+    }
+    if (confirmDangerBanner) {
+      confirmDangerBanner.style.display = 'none';
     }
     terminalConfirmModal.style.display = 'none';
     if (activeTerminalRequestId) {

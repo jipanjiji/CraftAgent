@@ -217,14 +217,15 @@ class FileManager {
         };
       }
 
+      // Detect if file originally used CRLF
+      const usesCRLF = original.includes('\r\n');
+
       // Try normalizing line endings to LF
       const normOriginal = original.replace(/\r\n/g, '\n');
       const normSearch = searchBlock.replace(/\r\n/g, '\n');
       const normReplace = replaceBlock.replace(/\r\n/g, '\n');
 
       if (normOriginal.includes(normSearch)) {
-        // Detect if file originally used CRLF
-        const usesCRLF = original.includes('\r\n');
         let updated = normOriginal.replace(normSearch, normReplace);
         if (usesCRLF) {
           updated = updated.replace(/\n/g, '\r\n');
@@ -237,9 +238,88 @@ class FileManager {
         };
       }
 
+      // Level 3: Fuzzy Trimmed Line Matching (tolerant to indentation/whitespace discrepancies for non-YAML files)
+      const ext = path.extname(fullPath).toLowerCase();
+      const isYaml = ext === '.yml' || ext === '.yaml';
+      const origLines = normOriginal.split('\n');
+      const searchLines = normSearch.split('\n');
+
+      if (!isYaml && searchLines.length > 0) {
+        let matchStartIndex = -1;
+        for (let i = 0; i <= origLines.length - searchLines.length; i++) {
+          let allMatch = true;
+          for (let k = 0; k < searchLines.length; k++) {
+            if (origLines[i + k].trim() !== searchLines[k].trim()) {
+              allMatch = false;
+              break;
+            }
+          }
+          if (allMatch) {
+            matchStartIndex = i;
+            break;
+          }
+        }
+
+        if (matchStartIndex !== -1) {
+          const origIndent = origLines[matchStartIndex].match(/^\s*/)[0];
+          const searchIndent = searchLines[0].match(/^\s*/)[0];
+          const replaceLines = normReplace.split('\n');
+
+          const adjustedReplaceLines = replaceLines.map(line => {
+            if (searchIndent && line.startsWith(searchIndent)) {
+              return origIndent + line.slice(searchIndent.length);
+            } else if (!line.startsWith(origIndent) && line.trim().length > 0) {
+              return origIndent + line.trimStart();
+            }
+            return line;
+          });
+
+          const newOrigLines = [
+            ...origLines.slice(0, matchStartIndex),
+            ...adjustedReplaceLines,
+            ...origLines.slice(matchStartIndex + searchLines.length)
+          ];
+
+          let updated = newOrigLines.join('\n');
+          if (usesCRLF) {
+            updated = updated.replace(/\n/g, '\r\n');
+          }
+          fs.writeFileSync(fullPath, updated, 'utf8');
+          return {
+            success: true,
+            path: displayPath,
+            message: `Successfully patched ${displayPath} (fuzzy whitespace & indentation match)`
+          };
+        }
+      }
+
+      // Level 4: Closest line diagnostic hint
+      const firstTarget = searchLines.find(l => l.trim().length > 0)?.trim() || '';
+      let closestLine = -1;
+      let closestPreview = '';
+
+      if (firstTarget) {
+        for (let i = 0; i < origLines.length; i++) {
+          const lineTrim = origLines[i].trim();
+          if (lineTrim === firstTarget || (lineTrim.length > 6 && (lineTrim.includes(firstTarget) || firstTarget.includes(lineTrim)))) {
+            closestLine = i + 1;
+            closestPreview = origLines[i].trim();
+            break;
+          }
+        }
+      }
+
+      let errorMsg = isYaml
+        ? `Could not find exact block in ${relativePath}. Note: YAML files (.yml/.yaml) are strictly indentation-sensitive, so fuzzy whitespace patching is disabled to prevent hierarchy corruption.`
+        : `Could not find exact search_block in ${relativePath}. Make sure search_block matches the current file contents.`;
+
+      if (closestLine !== -1) {
+        errorMsg += ` Hint: Found closest similar code at line ${closestLine}: "${closestPreview}". Please check exact indentation or inspect with read_file.`;
+      }
+
       return {
         success: false,
-        error: `Could not find exact search_block in ${relativePath}. Make sure search_block matches the current file contents exactly, including indentation.`
+        error: errorMsg
       };
     } catch (err) {
       return {
