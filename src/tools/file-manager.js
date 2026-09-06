@@ -412,6 +412,30 @@ class FileManager {
         };
       }
 
+      // Safety guard:
+      // Files inside .craft/temp/ can be deleted autonomously (audit cleanup).
+      // Deleting permanent workspace files outside .craft/temp/ requires user confirmation for safety.
+      const normRel = relativePath.replace(/\\/g, '/');
+      const isTempFile = normRel.startsWith('.craft/temp/') || normRel.includes('/.craft/temp/');
+
+      if (!isTempFile && this.confirmCallback) {
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        const approved = await this.confirmCallback({
+          id: requestId,
+          type: 'EXTERNAL_PATH',
+          action: 'delete_file',
+          path: fullPath,
+          isDangerous: true,
+          description: `Delete permanent workspace file: ${path.basename(fullPath)}`
+        });
+        if (!approved) {
+          return {
+            success: false,
+            error: `Deletion denied: User did not approve deleting "${relativePath}".`
+          };
+        }
+      }
+
       const stat = fs.statSync(fullPath);
       if (stat.isDirectory()) {
         fs.rmSync(fullPath, { recursive: true, force: true });

@@ -238,7 +238,7 @@ const TOOLS_SCHEMA = [
     type: "function",
     function: {
       name: "delete_file",
-      description: "Delete a file or temporary artifact inside the workspace (e.g. cleaning up temporary downloaded .jar files in '.craft/temp/' after an audit).",
+      description: "Delete a temporary file in '.craft/temp/' after an audit, or a file when explicitly instructed by the user. CRITICAL SAFETY: NEVER use this tool on existing workspace files, plugins, mods, or uploads unless the user explicitly requested file deletion. For analyzing local/existing jar files, ONLY use inspect_jar and never delete them.",
       parameters: {
         type: "object",
         properties: {
