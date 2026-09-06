@@ -1253,7 +1253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       attachmentsHtml = `<div class="message-attachments">${imgHtml}${fileHtml}</div>`;
     }
 
-    const textHtml = text ? `<div>${escapeHtml(text)}</div>` : '';
+    const textHtml = text ? `<div class="user-text-content">${escapeHtml(text)}</div>` : '';
 
     msgDiv.innerHTML = `
       <div class="message-meta">
