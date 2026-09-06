@@ -775,109 +775,22 @@ class AIEngine {
           onStatus(`Executing ${validToolCalls.length} tool request(s)...`);
         }
 
-        // Helper to execute single tool call and trigger memory sniffing
-        const executeSingleTool = async (tc) => {
-          const funcName = tc.function.name;
-          let parsedArgs = {};
-          try {
-            parsedArgs = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
-          } catch (e) {
-            console.error(`Failed to parse arguments for ${funcName}:`, tc.function.arguments);
-            parsedArgs = {};
-          }
+        const chunkResults = await this.executeToolCallsChunked(validToolCalls, {
+          onStatus,
+          onToolStart,
+          onToolComplete
+        });
 
-          const statusDesc = formatToolStatusDescription(funcName, parsedArgs);
-          if (onStatus) onStatus(statusDesc);
-
-          if (onToolStart) {
-            onToolStart({
-              id: tc.id,
-              name: funcName,
-              args: parsedArgs,
-              statusDescription: statusDesc
-            });
-          }
-
-          let toolResult;
-          try {
-            toolResult = await this.dispatchTool(funcName, parsedArgs);
-          } catch (execErr) {
-            toolResult = {
-              success: false,
-              error: `Tool execution failed: ${execErr.message}`
-            };
-          }
-
-          if (onToolComplete) {
-            onToolComplete({
-              id: tc.id,
-              name: funcName,
-              args: parsedArgs,
-              result: toolResult
-            });
-          }
-
-          // Sniff project context & milestones (Item 6)
-          this.sniffAndCaptureMemory(funcName, parsedArgs, toolResult);
-
-          return {
-            tc,
-            funcName,
-            toolResult
-          };
-        };
-
-        // Chunk validToolCalls into consecutive runs of read-only vs mutating
-        // (PRESERVES original relative order across chunks!)
-        const chunks = [];
-        let currentChunk = [];
-        let currentIsReadOnly = null;
-
-        for (const tc of validToolCalls) {
-          const isReadOnly = READ_ONLY_TOOLS.has(tc.function.name);
-          if (currentIsReadOnly === null) {
-            currentIsReadOnly = isReadOnly;
-            currentChunk.push(tc);
-          } else if (currentIsReadOnly && isReadOnly) {
-            currentChunk.push(tc);
-          } else {
-            chunks.push({ isReadOnly: currentIsReadOnly, items: currentChunk });
-            currentChunk = [tc];
-            currentIsReadOnly = isReadOnly;
-          }
-        }
-        if (currentChunk.length > 0) {
-          chunks.push({ isReadOnly: currentIsReadOnly, items: currentChunk });
-        }
-
-        // Execute chunks in strict sequence to preserve model's intended causality
-        for (const chunk of chunks) {
-          if (this.isAborted) break;
-
-          let chunkResults = [];
-          if (chunk.isReadOnly && chunk.items.length > 1) {
-            // Parallel concurrent execution for contiguous read-only tools
-            chunkResults = await Promise.all(chunk.items.map(tc => executeSingleTool(tc)));
-          } else {
-            // Sequential execution for mutating tools or single items
-            for (const tc of chunk.items) {
-              if (this.isAborted) break;
-              const res = await executeSingleTool(tc);
-              chunkResults.push(res);
-            }
-          }
-
-          // Push tool response messages to history in exact original order
-          for (const r of chunkResults) {
-            const rawToolJson = JSON.stringify(r.toolResult);
-            const prunedToolJson = pruneToolContent(rawToolJson);
-            this.historyManager.addMessage({
-              role: 'tool',
-              tool_call_id: r.tc.id,
-              name: r.funcName,
-              content: prunedToolJson
-            });
-          }
+        // Push tool response messages to history in exact original order
+        for (const r of chunkResults) {
+          const rawToolJson = JSON.stringify(r.toolResult);
+          const prunedToolJson = pruneToolContent(rawToolJson);
+          this.historyManager.addMessage({
+            role: 'tool',
+            tool_call_id: r.tc.id,
+            name: r.funcName,
+            content: prunedToolJson
+          });
         }
 
         if (this.isAborted) {
@@ -903,6 +816,114 @@ class AIEngine {
       }
       if (onError) onError(userFriendlyErr);
     }
+  }
+
+  isTransientError(err) {
+    return isTransientError(err);
+  }
+
+  /**
+   * Execute valid tool calls chunked by contiguous read-only vs mutating operations,
+   * preserving relative causal order while running parallel read operations.
+   */
+  async executeToolCallsChunked(validToolCalls, callbacks = {}) {
+    const { onStatus, onToolStart, onToolComplete } = callbacks;
+
+    const executeSingleTool = async (tc) => {
+      const funcName = tc.function.name;
+      let parsedArgs = {};
+      try {
+        parsedArgs = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
+      } catch (e) {
+        console.error(`Failed to parse arguments for ${funcName}:`, tc.function.arguments);
+        parsedArgs = {};
+      }
+
+      const statusDesc = formatToolStatusDescription(funcName, parsedArgs);
+      if (onStatus) onStatus(statusDesc);
+
+      if (onToolStart) {
+        onToolStart({
+          id: tc.id,
+          name: funcName,
+          args: parsedArgs,
+          statusDescription: statusDesc
+        });
+      }
+
+      let toolResult;
+      try {
+        toolResult = await this.dispatchTool(funcName, parsedArgs);
+      } catch (execErr) {
+        toolResult = {
+          success: false,
+          error: `Tool execution failed: ${execErr.message}`
+        };
+      }
+
+      if (onToolComplete) {
+        onToolComplete({
+          id: tc.id,
+          name: funcName,
+          args: parsedArgs,
+          result: toolResult
+        });
+      }
+
+      // Sniff project context & milestones (Item 6)
+      this.sniffAndCaptureMemory(funcName, parsedArgs, toolResult);
+
+      return {
+        tc,
+        funcName,
+        toolResult
+      };
+    };
+
+    // Chunk validToolCalls into consecutive runs of read-only vs mutating
+    // (PRESERVES original relative order across chunks!)
+    const chunks = [];
+    let currentChunk = [];
+    let currentIsReadOnly = null;
+
+    for (const tc of validToolCalls) {
+      const isReadOnly = READ_ONLY_TOOLS.has(tc.function.name);
+      if (currentIsReadOnly === null) {
+        currentIsReadOnly = isReadOnly;
+        currentChunk.push(tc);
+      } else if (currentIsReadOnly && isReadOnly) {
+        currentChunk.push(tc);
+      } else {
+        chunks.push({ isReadOnly: currentIsReadOnly, items: currentChunk });
+        currentChunk = [tc];
+        currentIsReadOnly = isReadOnly;
+      }
+    }
+    if (currentChunk.length > 0) {
+      chunks.push({ isReadOnly: currentIsReadOnly, items: currentChunk });
+    }
+
+    const allResults = [];
+    // Execute chunks in strict sequence to preserve model's intended causality
+    for (const chunk of chunks) {
+      if (this.isAborted) break;
+
+      let chunkResults = [];
+      if (chunk.isReadOnly && chunk.items.length > 1) {
+        // Parallel concurrent execution for contiguous read-only tools
+        chunkResults = await Promise.all(chunk.items.map(tc => executeSingleTool(tc)));
+      } else {
+        // Sequential execution for mutating tools or single items
+        for (const tc of chunk.items) {
+          if (this.isAborted) break;
+          const res = await executeSingleTool(tc);
+          chunkResults.push(res);
+        }
+      }
+      allResults.push(...chunkResults);
+    }
+
+    return allResults;
   }
 
   /**
@@ -1073,4 +1094,4 @@ class AIEngine {
   }
 }
 
-module.exports = { AIEngine, TOOLS_SCHEMA };
+module.exports = { AIEngine, TOOLS_SCHEMA, isTransientError };

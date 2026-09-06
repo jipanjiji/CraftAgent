@@ -10,7 +10,7 @@ const { HistoryManager, pruneToolContent, estimateTokens } = require('./src/hist
 const { WorkspaceMemory } = require('./src/workspace-memory');
 const { WebIntelligence } = require('./src/tools/web-intelligence');
 const { getSystemPrompt } = require('./src/system-prompt');
-const { AIEngine } = require('./src/ai-engine');
+const { AIEngine, isTransientError } = require('./src/ai-engine');
 const { DiffEngine } = require('./src/diff-engine');
 const { ModrinthService } = require('./src/tools/modrinth-service');
 
@@ -22,6 +22,7 @@ async function runTests() {
     fs.rmSync(testDir, { recursive: true, force: true });
   }
   fs.mkdirSync(testDir, { recursive: true });
+  try {
 
   // 1. ConfigManager & Model Catalog
   console.log('Testing ConfigManager & Model Catalog...');
@@ -50,6 +51,18 @@ async function runTests() {
   cfgMgr.saveConfig({ history: { maxTokenBudget: 2000000 } });
   assert.strictEqual(cfgMgr.getConfig().history.maxTokenBudget, 1000000, 'maxTokenBudget should clamp max to 1000000');
   console.log('  ✓ Security mode & maxTokenBudget (64k default, 8k-1M clamping) correctly saved and persisted.');
+
+  // Test ConfigManager input validation for malformed values
+  const malformedInputs = ['abc', null, undefined, {}, [], NaN, ''];
+  for (const badInput of malformedInputs) {
+    cfgMgr.saveConfig({ history: { maxTokenBudget: badInput } });
+    const budget = cfgMgr.getConfig().history.maxTokenBudget;
+    assert.ok(
+      Number.isFinite(budget) && budget >= 8000 && budget <= 1000000,
+      `maxTokenBudget must remain a valid clamped number after malformed input (${JSON.stringify(badInput)}), got ${budget}`
+    );
+  }
+  console.log('  ✓ ConfigManager input validation rejects/falls back safely on all malformed values.');
 
   // Verify vendors in catalog
   const vendors = Object.keys(MODELS_CATALOG);
@@ -516,12 +529,113 @@ async function runTests() {
   assert.strictEqual(remM, '4.89', 'Remaining millions should format to 4.89M');
   console.log(`  ✓ Quota tracker calculations verified: ${calcPct}% remaining, ${remM}M free.`);
 
-  // Cleanup test workspace
+  // 11. Resilience, Chunked Execution & Retry Backoff
+  console.log('\nTesting Resilience, Chunked Execution & Retry Backoff...');
+
+  // 11a. Chunked In-Order Parallel Execution (race condition)
+  await fileMgr.writeFile('RaceTest.txt', 'original content');
+  const engineForRace = new AIEngine({
+    configManager: cfgMgr,
+    historyManager: hist,
+    fileManager: fileMgr,
+    terminalExecutor: term,
+    workspaceScanner: new WorkspaceScanner(testDir),
+    webIntelligence: new WebIntelligence()
+  });
+  engineForRace.setWorkspaceRoot(testDir);
+
+  const toolCallSequence = [
+    { id: 'tc_1', function: { name: 'read_file', arguments: JSON.stringify({ path: 'RaceTest.txt' }) } },
+    { id: 'tc_2', function: { name: 'read_file', arguments: JSON.stringify({ path: 'RaceTest.txt' }) } },
+    { id: 'tc_3', function: { name: 'write_file', arguments: JSON.stringify({ path: 'RaceTest.txt', content: 'updated content' }) } },
+    { id: 'tc_4', function: { name: 'read_file', arguments: JSON.stringify({ path: 'RaceTest.txt' }) } },
+  ];
+
+  const raceResults = await engineForRace.executeToolCallsChunked(toolCallSequence);
+  const lastReadResult = raceResults.find(r => r.tc.id === 'tc_4');
+  const fileContent = lastReadResult?.toolResult?.content || '';
+  assert.ok(
+    fileContent.includes('updated content'),
+    'Read AFTER write in the same chunked sequence must see the updated content, not stale data'
+  );
+  console.log('  ✓ Chunked parallel execution preserves read-after-write causality.');
+
+  // 11b. Exponential Backoff Retry Logic
+  let attemptCount = 0;
+  const attemptTimestamps = [];
+  const mockFailingClient = {
+    chat: {
+      completions: {
+        create: async () => {
+          attemptCount++;
+          attemptTimestamps.push(Date.now());
+          if (attemptCount < 3) {
+            const err = new Error('Rate limit exceeded');
+            err.status = 429;
+            throw err;
+          }
+          return {
+            [Symbol.asyncIterator]: async function* () {
+              yield { choices: [{ delta: { content: 'OK' }, finish_reason: 'stop' }] };
+            }
+          };
+        }
+      }
+    }
+  };
+
+  const retryCfgMgr = new ConfigManager(testDir);
+  retryCfgMgr.saveConfig({ api: { apiKey: 'dummy-test-key' } });
+  const engineForRetry = new AIEngine({
+    configManager: retryCfgMgr,
+    historyManager: new HistoryManager(10, 20000),
+    fileManager: fileMgr,
+    terminalExecutor: term,
+    workspaceScanner: new WorkspaceScanner(testDir),
+    webIntelligence: new WebIntelligence()
+  });
+  engineForRetry.setWorkspaceRoot(testDir);
+  engineForRetry.getOpenAIClient = () => mockFailingClient;
+
   try {
-    fs.rmSync(testDir, { recursive: true, force: true });
+    await engineForRetry.chat({
+      userMessage: 'trigger retry test',
+      onChunk: () => {},
+      onStatus: () => {},
+      onError: () => {},
+      onFinish: () => {}
+    });
   } catch (e) {}
 
+  assert.strictEqual(attemptCount, 3, `Expected exactly 3 attempts (2 failures + 1 success), got ${attemptCount}`);
+  if (attemptTimestamps.length >= 3) {
+    const delay1 = attemptTimestamps[1] - attemptTimestamps[0];
+    const delay2 = attemptTimestamps[2] - attemptTimestamps[1];
+    assert.ok(delay1 >= 900, `First retry delay should be ~1000ms, got ${delay1}ms`);
+    assert.ok(delay2 >= 1900, `Second retry delay should be ~2000ms, got ${delay2}ms`);
+    console.log(`  ✓ Retry attempted 3 times with escalating delays (${delay1}ms, ${delay2}ms).`);
+  }
+
+  // 11c. Hybrid Error Classification Priority
+  const structuredErr = new Error('some opaque provider message with no useful keywords');
+  structuredErr.status = 503;
+  assert.strictEqual(engineForRetry.isTransientError(structuredErr), true, '503 must be classified as transient via status');
+
+  const stringOnlyErr = new Error('socket hang up');
+  assert.strictEqual(engineForRetry.isTransientError(stringOnlyErr), true, 'socket hang up must be classified as transient via fallback string check');
+
+  const authErr = new Error('rate limit-like wording but should not matter');
+  authErr.status = 401;
+  assert.strictEqual(engineForRetry.isTransientError(authErr), false, '401 must never be classified as transient');
+  console.log('  ✓ Hybrid error classification (status code vs string fallback vs 401 exclusion) verified.');
+
   console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY! Everything is verified.');
+  } finally {
+    // Guaranteed cleanup
+    try {
+      fs.rmSync(testDir, { recursive: true, force: true });
+    } catch (e) {}
+  }
 }
 
 runTests().catch(err => {
