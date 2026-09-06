@@ -729,9 +729,10 @@ class AIEngine {
           }
 
           // 2. If the model gave an explanation promising execution but forgot to attach tool calls:
-          const isPromiseToExecute = /(tunggu sebentar|tunggu sejenak|sebentar ya|wait a moment|one moment|hang on|langsung saya (eksekusi|perbaiki|buat|kerjakan)|akan saya (eksekusi|perbaiki|ubah|ganti|edit|update|jalankan|build|buat|bikin|kerjakan)|saya akan (perbaiki|ubah|ganti|edit|update|benahi|jalankan|build|kompilasi|buat|bikin|buatkan|eksekusi|lanjutkan|mulai|tulis|selesaikan)|lalu jalankan (build|kompilasi|perintah|command)|sedang saya (perbaiki|proses|kerjakan|buat)|mari saya (perbaiki|ubah|buat|jalankan)|i will (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make|implement|proceed)|let me (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make)|i'll (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make))/i.test(fullTextContent);
+          const hasHangingColon = /:\s*$/.test(fullTextContent.trim()) && !fullTextContent.includes('```');
+          const isPromiseToExecute = hasHangingColon || /(tunggu sebentar|tunggu sejenak|sebentar ya|wait a moment|one moment|hang on|(saya|mari|kita|akan|langsung|sedang|siap)\s+(lanjutkan|mulai|teruskan|proses|kerjakan|buat|eksekusi|perbaiki|ubah|ganti|edit|update|jalankan|build|bikin|tulis|benahi)|(menulis|membuat|bikin|generate|coding|koding)\s+(file|kode|script|class|plugin)|(file|kode|class)\s+(pertama|utama|selanjutnya|berikutnya|dulu)|i will (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make|implement|proceed|write)|let me (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make|write)|i'll (now |)(fix|update|modify|change|patch|run|execute|build|compile|create|make|write))/i.test(fullTextContent);
 
-          if (isPromiseToExecute && loopIterations < 5 && autoContinueCount < 2) {
+          if (isPromiseToExecute && loopIterations < 6 && autoContinueCount < 3) {
             autoContinueCount++;
             if (fullTextContent) {
               this.historyManager.addMessage({
@@ -741,7 +742,7 @@ class AIEngine {
             }
             this.historyManager.addMessage({
               role: 'user',
-              content: 'Lanjutkan sekarang dan jalankan tindakan atau berikan penjelasan yang diperlukan untuk menyelesaikannya.'
+              content: 'Lanjutkan sekarang. Langsung panggil tool write_file atau patch_file untuk mengeksekusi dan menulis kodenya sekarang, jangan hanya memberikan pengantar teks.'
             });
             continue;
           }
